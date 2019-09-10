@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>4.5、重构为本地方法 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言JNI（Java Native Interface）意为Java本地接口，我们可以通过JNI来实现Java与C/C++之间互调。前面我们介绍了重构方法的方案，不过重构后的方法仍然是Java方法，因此分析起来相对也比较容易。这一章我将介绍的是重构到本地方法中，即需要把字节码转换为本地代码。方案选择实现方案优势劣势方案一把字节码直接转换为相应的汇编代码字节码是基于栈的，而汇编中直接支持栈的操作，因此实现比较容易且运行效率非常高。 汇编代码不跨平台，因而需要针对每...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#方案选择"><span class="toc-number">2.</span> <span class="toc-text">方案选择</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#初步设计"><span class="toc-number">3.</span> <span class="toc-text">初步设计</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#动态注册"><span class="toc-number">4.</span> <span class="toc-text">动态注册</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#整型问题"><span class="toc-number">5.</span> <span class="toc-text">整型问题</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Android的Bug"><span class="toc-number">6.</span> <span class="toc-text">Android的Bug</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            4.5、重构为本地方法
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/05/11/android-asm-04-5/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-05-11T00:00:00.000Z" itemprop="datePublished">2015-05-11</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>JNI（Java Native Interface）意为Java本地接口，我们可以通过JNI来实现Java与C/C++之间互调。</p>
+<p>前面我们介绍了重构方法的方案，不过重构后的方法仍然是Java方法，因此分析起来相对也比较容易。</p>
+<p>这一章我将介绍的是重构到本地方法中，即需要把字节码转换为本地代码。</p>
+<h1 id="方案选择"><a href="#方案选择" class="headerlink" title="方案选择"></a>方案选择</h1><table>
+<thead>
+<tr>
+<th>实现方案</th>
+<th>优势</th>
+<th>劣势</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>方案一</td>
+<td>把字节码直接转换为相应的汇编代码</td>
+<td>字节码是基于栈的，而汇编中直接支持栈的操作，因此实现比较容易且运行效率非常高。 汇编代码不跨平台，因而需要针对每个平台来编写对应的汇编代码。</td>
+</tr>
+<tr>
+<td>方案二</td>
+<td>把字节码转换为相应的C/C++代码 跨平台，实现起来比较简单。</td>
+<td>运行效率相对较低。</td>
+</tr>
+</tbody></table>
+<p>如果是为了做优化，建议选择方案一，但如果只是为了混淆，那么方案二是个好选择，毕竟编程起来更容易，也更好维护。这里选择的是方案二。</p>
+<p>另外，这里选择使用C，因为C编译出来的体积更少。</p>
+<a id="more"></a>
+<h1 id="初步设计"><a href="#初步设计" class="headerlink" title="初步设计"></a>初步设计</h1><p>bytecode是基于栈的，如果我们要模拟bytecode的功能，先模拟栈的功能会事半功倍。汇编中自带了栈操作的指令，因此使用汇编实现的话会比较简单。C++的STL库中也有实现好的栈，但不好的地方就是使用C++编译后的文件会比较大。而由于C中没有栈的实现，需要自己实现，相对来说比较麻烦。不过幸运的是，bytecode中栈和本地变量的大小都是固定的，也就是说我们完全可以使用一个固定的数组来实现。</p>
+<p>我们知道Java中有8种基本数据类型和引用类型，分别对应于JNI中的jboolean、jbyte、jchar、jshort、jint、jfloat、jlong、jdouble、jobject。除此之外，JNI中还是jarray、jclass等类型，不过这些类型实际上还是jobject类型。因此，为了保证栈可以保存所有类型，我们可以定义一个union类型，里面包括了所有数据类型：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">typedef union &#123;</span><br><span class="line">    jboolean Z;</span><br><span class="line">    jbyte B;</span><br><span class="line">    jchar C;</span><br><span class="line">    jshort S;</span><br><span class="line">    jint I;</span><br><span class="line">    jfloat F;</span><br><span class="line">    jlong J;</span><br><span class="line">    jdouble D;</span><br><span class="line">    jobject O;</span><br><span class="line">&#125;place;</span><br></pre></td></tr></table></figure>
+
+<p>接下来，我们需要根据每个方法中的字节码，生成对应的C函数。由于我们需要自动化生成对应的C代码，也就是需要字符串拼接，而有些地方的设计是通用的，因此我们可以先设计一个模板，然后根据实际情况进行替换。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">@_retType_@ @_functionName_@(JNIEnv* env, jobject obj@_argType_@) &#123;</span><br><span class="line">    int stackTop = 0;</span><br><span class="line">    place locals[@_maxLocals_@];</span><br><span class="line">    place stack[@_maxStack_@];</span><br><span class="line">    memset(locals, 0, sizeof(locals));</span><br><span class="line">    memset(stack, 0, sizeof(stack));</span><br><span class="line">    </span><br><span class="line">    @_argInit_@</span><br><span class="line">    </span><br><span class="line">    @_code_@</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中locals对应于bytecode的本地变量，stack对应于bytecode的栈。</p>
+<p>这里我用@<em>xxx</em>@来代表要替换的内容，含义如下：</p>
+<p>retType：返回值类型。</p>
+<p>functionName：函数名，需要保证不重复。</p>
+<p>argType：包含的参数。</p>
+<p>maxLocals：本地变量的大小，可通过MethodNode.maxLocals来获取。</p>
+<p>maxStack：栈的大小，可通过MethodNode.maxStack来获取。</p>
+<p>argInit：如果有参数的话，则初始化参数到相应的locals中。</p>
+<p>code：根据bytecode转换出来的C代码。</p>
+<p>这样我们只需要把相应的内容替换进模板中，就可以得到一个完整的JNI函数了。接着我们只要把此函数与对应的Java的native方法关联起来就可以了。</p>
+<p>代码生成</p>
+<p>假设有如下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">package com.tencent.asm;</span><br><span class="line">public class Record &#123;</span><br><span class="line">    int count;</span><br><span class="line">    public void clear() &#123;</span><br><span class="line">        count = 0;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对应的字节码为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ALOAD 0</span><br><span class="line">ICONST_0</span><br><span class="line">PUTFIELD com/tencent/asm/Record.count : I</span><br><span class="line">RETURN</span><br><span class="line">MAXSTACK = 2</span><br><span class="line">MAXLOCALS = 1</span><br></pre></td></tr></table></figure>
+
+<p>现在我们需要把它转换为C语言的实现，最简单的方式当然是每个指令作相应的转换。我们先按照模板填一下除了code以外对应的信息：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">void com_tencent_asm_record_clear_v(JNIEnv* env, jobject obj) &#123;</span><br><span class="line">    int stackTop = 0;</span><br><span class="line">    place locals[1];</span><br><span class="line">    place stack[2];</span><br><span class="line">    memset(locals, 0, sizeof(locals));</span><br><span class="line">    memset(stack, 0, sizeof(stack));</span><br><span class="line">    // 注意下，此时obj为this指针，在bytecode中为第0个本地变量</span><br><span class="line">    locals[0] = obj;</span><br><span class="line">    </span><br><span class="line">    @_code_@</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>为了更好的调试，建议名字取得与原方法的名字类似，另外，生成对应的代码也做好注释（后面生成代码时后看到）。</p>
+<p>模板生成后了，就差具体代码的实现了。不知大家有没注意到，模板中有个stackTop的变量，这个变量用来代表当前栈顶的位置，这样在生成代码时，我们不需要关心当前使用的是栈的哪个位置，只需对应地更改下stackTop就行。</p>
+<p>第一条指令很简单，就是把第0个本地变量的值拷贝到栈中，因此我们可以生成对应的C代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stack[stackTop++].O = locals[0];</span><br></pre></td></tr></table></figure>
+
+<p>很简单的吧，需要注意的是ALOAD指令加载的是引用，所以用的是place.O（上面定义place时，O为jobject类型，后面我就不再说明）。</p>
+<p>第二条指令也很简单，就是把整数0压到栈中，对应的C代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stack[stackTop++].I = 0;</span><br></pre></td></tr></table></figure>
+
+<p>第三条指令就相对复杂一些，我们看下文档，putfield指令要求栈中有两个值，分别是需要设置的对象的引用、需要设置的值。这条指令是用来设置某个类的实例的属性的值，这里我们就需要用到相应的JNI函数了。由于属性的类型为int，因而我们使用的是SetIntField方法，其声明如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">void (*SetIntField)(JNIEnv*, jobject, jfieldID, jint);</span><br></pre></td></tr></table></figure>
+
+<p>其中jfieldID为属性的标识，我们需要先通过FindClass方法获得属性所在类的标识，其声明如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jclass (*FindClass)(JNIEnv*, const char*);</span><br></pre></td></tr></table></figure>
+
+<p>其中第二个参数为类的全局限定名。接着再通过GetFieldID来获得属性的标识，其声明如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jfieldID (*GetFieldID)(JNIEnv*, jclass, const char*, const char*);</span><br></pre></td></tr></table></figure>
+
+<p>其中第2、3、4个参数依次为类标识、属性名、属性描述。</p>
+<p>我们来看下对应的C代码是怎样的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">jclass record_class = (*env)-&gt;FindClass(env, &quot;com/tencent/asm/Record&quot;);</span><br><span class="line">jfieldID count_field = (*env)-&gt;GetFieldID(env, record_class, &quot;count&quot;, &quot;I&quot;);</span><br><span class="line">(*env)-&gt;SetIntField(env, count_field, stack[stackTop-2].O, stack[stackTop-1].I);</span><br><span class="line">stackTop -= 2;</span><br></pre></td></tr></table></figure>
+
+<p>至于return指令就不用解释了吧。汇总一下，就得到最终的转换结果：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">void com_tencent_asm_record_clear_v(JNIEnv* env, jobject obj) &#123;</span><br><span class="line">    int stackTop = 0;</span><br><span class="line">    place locals[1];</span><br><span class="line">    place stack[3];</span><br><span class="line">    memset(locals, 0, sizeof(locals));</span><br><span class="line">    memset(stack, 0, sizeof(stack));</span><br><span class="line">    locals[0].O = obj;</span><br><span class="line">    </span><br><span class="line">    // ALOAD 0</span><br><span class="line">    stack[stackTop++].O = locals[0].O;</span><br><span class="line">    // ICONST_0</span><br><span class="line">    stack[stackTop++].I = 0;</span><br><span class="line">    // PUTFIELD com/tencent/asm/Record.count : I</span><br><span class="line">    jclass record_class = (*env)-&gt;FindClass(env, &quot;com/tencent/asm/Record&quot;);</span><br><span class="line">    jfieldID count_field = (*env)-&gt;GetFieldID(env, record_class, &quot;count&quot;, &quot;I&quot;);</span><br><span class="line">    (*env)-&gt;SetIntField(env, count_field, stack[stackTop-2].O, stack[stackTop-1].I);</span><br><span class="line">    stackTop -= 2;</span><br><span class="line">    // RETURN</span><br><span class="line">    return;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h1 id="动态注册"><a href="#动态注册" class="headerlink" title="动态注册"></a>动态注册</h1><p>关于如何注册JNI函数，这里使用静态注册与动态注册均可，这里我说一下如何进行动态注册。</p>
+<p>由于我们自动化生成代码时，会处理多个类，而注册JNI函数的方法一次只支持一个类，因此我们可以设计一个结构体，来存放每个类的信息，这样只需做个循环就可以全部注册了。设计如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    const char* className;</span><br><span class="line">    JNINativeMethod* methods;</span><br><span class="line">    int size;</span><br><span class="line">&#125;reg_info;</span><br></pre></td></tr></table></figure>
+
+<p>接着我们加入类似如下的代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line">// 获取数组中元素个数</span><br><span class="line">#define GET_SIZE(x) (sizeof(x) / sizeof(x[0]))</span><br><span class="line">// 每个类生成一个对应的数组，来保存相应的映射关系</span><br><span class="line">static JNINativeMethod gMethods_Record[] = &#123;</span><br><span class="line">    &#123; &quot;clear&quot;, &quot;()V&quot;, (void*) com_tencent_asm_record_clear_v &#125;,</span><br><span class="line">&#125;;</span><br><span class="line">// 保存所有类需要注册的信息</span><br><span class="line">static reg_info gInfos[] = &#123;</span><br><span class="line">    &#123;&quot;com/tencent/asm/Record&quot;, gMethods_Record, GET_SIZE(gMethods_Record)&#125;,</span><br><span class="line">&#125;;</span><br><span class="line">static int registerNativeMethods(JNIEnv* env, const char* className,</span><br><span class="line">        JNINativeMethod* gMethods, int numMethods) &#123;</span><br><span class="line">    jclass clazz = (*env)-&gt;FindClass(env, className);</span><br><span class="line">    void* retValue = (*env)-&gt;ExceptionOccurred(env);</span><br><span class="line">    // 类没找到，有些应用神经病地加上了一些android中没有的类来坑人。直接跳过当成已处理就行</span><br><span class="line">    if(retValue) &#123;</span><br><span class="line">        (*env)-&gt;ExceptionClear(env);</span><br><span class="line">        return JNI_TRUE;</span><br><span class="line">    &#125;</span><br><span class="line">    if (clazz == NULL) &#123;</span><br><span class="line">        return JNI_FALSE;</span><br><span class="line">    &#125;</span><br><span class="line">    if ((*env)-&gt;RegisterNatives(env, clazz, gMethods, numMethods) &lt; 0) &#123;</span><br><span class="line">        (*env)-&gt;DeleteLocalRef(env, clazz);</span><br><span class="line">        return JNI_FALSE;</span><br><span class="line">    &#125;</span><br><span class="line">    (*env)-&gt;DeleteLocalRef(env, clazz);</span><br><span class="line">    return JNI_TRUE;</span><br><span class="line">&#125;</span><br><span class="line">static int registerNatives(JNIEnv* env) &#123;</span><br><span class="line">    int i=0;</span><br><span class="line">    int size = GET_SIZE(gInfos);</span><br><span class="line">    // 批量注册</span><br><span class="line">    for(;i&lt;size;++i) &#123;</span><br><span class="line">        if(!registerNativeMethods(env, gInfos[i].className, gInfos[i].methods, gInfos[i].size)) &#123;</span><br><span class="line">            return JNI_FALSE;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    return JNI_TRUE;</span><br><span class="line">&#125;</span><br><span class="line">// 当Java中调用System.loadLibrary()方法来加载相应的so库时，系统会回调此方法</span><br><span class="line">JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) &#123;</span><br><span class="line">    JNIEnv* env = NULL;</span><br><span class="line">    jint result = -1;</span><br><span class="line"></span><br><span class="line">    if ((*vm)-&gt;GetEnv(vm, (void**) &amp;env, JNI_VERSION_1_4) != JNI_OK) &#123;</span><br><span class="line">        return -1;</span><br><span class="line">    &#125;</span><br><span class="line">    assert(env != NULL);</span><br><span class="line"></span><br><span class="line">    if (!registerNatives(env)) &#123;</span><br><span class="line">        return -1;</span><br><span class="line">    &#125;</span><br><span class="line">    result = JNI_VERSION_1_4;</span><br><span class="line">    return result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>至于如何进行编译，不懂的请到网上搜下，这里就不细说了。</p>
+<h1 id="整型问题"><a href="#整型问题" class="headerlink" title="整型问题"></a>整型问题</h1><p>在bytecode的操作本地变量与栈的指令中，boolean、byte、char、short、int这些类型，都会当然整型来处理，而像数组操作等指令则可以操作这些类型，这样一不小心，就可能会出现类型转换的问题了。我们来看个例子，假设有如下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">package com.tencent.asm;</span><br><span class="line">public class EncryptUtil &#123;</span><br><span class="line">    public static int count(byte[] src) &#123;</span><br><span class="line">        return src[0] + src[1];</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对应的字节码为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">ALOAD 0</span><br><span class="line">ICONST_0</span><br><span class="line">BALOAD</span><br><span class="line">ALOAD 0</span><br><span class="line">ICONST_1</span><br><span class="line">BALOAD</span><br><span class="line">IADD</span><br><span class="line">IRETURN</span><br><span class="line">MAXSTACK = 3</span><br><span class="line">MAXLOCALS = 1</span><br></pre></td></tr></table></figure>
+
+<p>接着我把它转换为对应的C代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">void com_tencent_asm_encryptutil_count_bi(JNIEnv* env, jclass obj, jarray src) &#123;</span><br><span class="line">    int stackTop = 0;</span><br><span class="line">    place locals[1];</span><br><span class="line">    place stack[3];</span><br><span class="line">    // 增加一个临时变量用来存放返回值</span><br><span class="line">    place retValue;</span><br><span class="line">    memset(locals, 0, sizeof(locals));</span><br><span class="line">    memset(stack, 0, sizeof(stack));</span><br><span class="line">    // 由于是静态，所以obj为对应的类标识，第1个本地变量为src</span><br><span class="line">    locals[0].O = src;</span><br><span class="line"></span><br><span class="line">    // ALOAD 0</span><br><span class="line">    stack[stackTop++].O = locals[0].O;</span><br><span class="line">    // ICONST_0</span><br><span class="line">    stack[stackTop++].I = 0;</span><br><span class="line">    // BALOAD</span><br><span class="line">    (*env)-&gt;GetByteArrayRegion(env, stack[stackTop-2].O, stack[stackTop-1].I, 1, &amp;retValue.B);</span><br><span class="line">    stack[--stackTop-1].B = retValue.B;</span><br><span class="line">    // ALOAD 0</span><br><span class="line">    stack[stackTop++].O = locals[0];</span><br><span class="line">    // ICONST_1</span><br><span class="line">    stack[stackTop++].I = 1;</span><br><span class="line">    // BALOAD</span><br><span class="line">    (*env)-&gt;GetByteArrayRegion(env, stack[stackTop-2].O, stack[stackTop-1].I, 1, &amp;retValue.B);</span><br><span class="line">    stack[--stackTop-1].B = retValue.B;</span><br><span class="line">    // IADD</span><br><span class="line">    stack[stackTop-2].I = stack[stackTop-2].I + stack[stackTop-1].I;</span><br><span class="line">    --stackTop;</span><br><span class="line">    // IRETURN</span><br><span class="line">    return stack[--stackTop].I;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不知道大家有没发现上面的写法存在的问题。jbyte对应于Java中的byte，其在JNI中的定义实际是个signed char，占1个字节，我们针对BALOAD的处理时，把栈中的元素当成是jbyte来处理，而栈的元素实际占了8个字节，也就说高7字节并没被更改，而在后面IADD时，我们无法知道其本身是个byte，所以直接当成int来处理。这样问题就来了，此时int的高3个字节是什么内容呢？为了防止这种情况发生，我们可以在使用栈前清空栈中的内容，这样就不用担心旧数据的影响了。</p>
+<p>另外还有个问题，假如byte中的值是-1呢？按照上面的写法，int的高3个字节均为0，所以它的值就变为255了，这显然不符合我们需要吧。这问题其实就是自动类型转换的问题，改起来就很简单，我们只需要把下面代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stack[--stackTop-1].B = retValue.B;</span><br></pre></td></tr></table></figure>
+
+<p>改成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stack[--stackTop-1].I = retValue.B;</span><br></pre></td></tr></table></figure>
+
+<p>如果你把它改成下面的代码，那么就连之前说的清空栈操作也可以省了。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stack[--stackTop-1].J = retValue.B;</span><br></pre></td></tr></table></figure>
+
+<h1 id="Android的Bug"><a href="#Android的Bug" class="headerlink" title="Android的Bug"></a>Android的Bug</h1><p>俗话说得好，眼见为实，还是惯例，先给段Java代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">package com.tencent.asm;</span><br><span class="line">public class AndroidBug &#123;</span><br><span class="line">    public int debug(Object value) &#123;</span><br><span class="line">        if(value instanceof String) &#123;</span><br><span class="line">            return 1;</span><br><span class="line">        &#125;</span><br><span class="line">        return 0;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对应的字节码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">    ALOAD 1</span><br><span class="line">    INSTANCEOF java/lang/String</span><br><span class="line">    IFEQ L1</span><br><span class="line">    ICONST_1</span><br><span class="line">    IRETURN</span><br><span class="line">L1</span><br><span class="line">    ICONST_0</span><br><span class="line">    IRETURN</span><br><span class="line">    MAXSTACK = 1</span><br><span class="line">    MAXLOCALS = 2</span><br></pre></td></tr></table></figure>
+
+<p>对应的C代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">jint com_tencent_asm_androidbug_debug_ov(JNIEnv* env, jobject obj, jobject value) &#123;</span><br><span class="line">    int stackTop = 0;</span><br><span class="line">    place locals[2];</span><br><span class="line">    place stack[1];</span><br><span class="line">    memset(locals, 0, sizeof(locals));</span><br><span class="line">    memset(stack, 0, sizeof(stack));</span><br><span class="line">    locals[0].O = obj;</span><br><span class="line">    locals[1].O = value;</span><br><span class="line"></span><br><span class="line">    // ALOAD 1</span><br><span class="line">    stack[stackTop++].O = locals[1].O;</span><br><span class="line">    // INSTANCEOF java/lang/String</span><br><span class="line">    jclass string_class = (*env)-&gt;FindClass(env, &quot;java/lang/String&quot;);</span><br><span class="line">    stack[stackTop-1].J = (*env)-&gt;IsInstanceOf(env, stack[stackTop-1].O, string_class);</span><br><span class="line">    // IFEQ L1</span><br><span class="line">    if(stack[stackTop-1].I == 0) &#123;</span><br><span class="line">        goto L1;</span><br><span class="line">    &#125;</span><br><span class="line">    // ICONST_1</span><br><span class="line">    stack[stackTop++].I = 1;</span><br><span class="line">    // IRETURN</span><br><span class="line">    return stack[stackTop-1].I;</span><br><span class="line">    // L1</span><br><span class="line">    // 加入stackTop = stackTop;这行无意义的代码是因为Label后不能跟声明</span><br><span class="line">L1: stackTop = stackTop;</span><br><span class="line">    // ICONST_0</span><br><span class="line">    stack[stackTop++].I = 0;</span><br><span class="line">    // IRETURN</span><br><span class="line">    return stack[stackTop-1].I;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>大家知道问题出现在哪里吗？不知道没关系，我们可以猜一下。大家看我给的代码非常短，比较关键的代码就在于instanceof了，也就是说应该是instanceof出的问题。那么instanceof会出什么问题呢？我们先看下JNI的实现，下面是Jni.cpp中IsInstanceOf的源码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">static jboolean IsInstanceOf(JNIEnv* env, jobject jobj, jclass jclazz) &#123;</span><br><span class="line">    ScopedJniThreadState ts(env);</span><br><span class="line"></span><br><span class="line">    assert(jclazz != NULL);</span><br><span class="line">    if (jobj == NULL) &#123;</span><br><span class="line">        return true;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Object* obj = dvmDecodeIndirectRef(ts.self(), jobj);</span><br><span class="line">    ClassObject* clazz = (ClassObject*) dvmDecodeIndirectRef(ts.self(), jclazz);</span><br><span class="line">    return dvmInstanceof(obj-&gt;clazz, clazz);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们需要看下Dalvik中又是怎么实现的。</p>
+<p>Dalvik虚拟机的执行引擎有两个，分别是Fast解释器（用汇编实现）以及Portable解释器（用C语言实现）。为了方便阅读，我们选择Portable解释器来分析。Portable解释器的源码位于dalvik\vm\mterp\out\InterpC-portable.cpp。</p>
+<p>我们找到dalvik bytecode中的instance-of指令对应的实现代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">HANDLE_OPCODE(OP_INSTANCE_OF /*vA, vB, class@CCCC*/)</span><br><span class="line">    &#123;</span><br><span class="line">        ClassObject* clazz;</span><br><span class="line">        Object* obj;</span><br><span class="line"></span><br><span class="line">        vdst = INST_A(inst);</span><br><span class="line">        vsrc1 = INST_B(inst);   /* object to check */</span><br><span class="line">        ref = FETCH(1);         /* class to check against */</span><br><span class="line">        ILOGV(&quot;|instance-of v%d,v%d,class@0x%04x&quot;, vdst, vsrc1, ref);</span><br><span class="line"></span><br><span class="line">        obj = (Object*)GET_REGISTER(vsrc1);</span><br><span class="line">        if (obj == NULL) &#123;</span><br><span class="line">            SET_REGISTER(vdst, 0);</span><br><span class="line">        &#125; else &#123;</span><br><span class="line">#if defined(WITH_EXTRA_OBJECT_VALIDATION)</span><br><span class="line">            if (!checkForNullExportPC(obj, fp, pc))</span><br><span class="line">                GOTO_exceptionThrown();</span><br><span class="line">#endif</span><br><span class="line">            clazz = dvmDexGetResolvedClass(methodClassDex, ref);</span><br><span class="line">            if (clazz == NULL) &#123;</span><br><span class="line">                EXPORT_PC();</span><br><span class="line">                clazz = dvmResolveClass(curMethod-&gt;clazz, ref, true);</span><br><span class="line">                if (clazz == NULL)</span><br><span class="line">                    GOTO_exceptionThrown();</span><br><span class="line">            &#125;</span><br><span class="line">            SET_REGISTER(vdst, dvmInstanceof(obj-&gt;clazz, clazz));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    FINISH(2);</span><br><span class="line">OP_END</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看到一大堆宏指令，想深入研究的请自行分析，这里我说明一下关键点。</p>
+<p>在Jni.cpp中IsInstanceOf函数里，我们可以看到如下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">if (jobj == NULL) &#123;</span><br><span class="line">    return true;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这表示了如果对象为空，则返回为真，即代表空对象是所有类的实例。</p>
+<p>而在InterpC-portable.cpp中，相应的代码为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">if (obj == NULL) &#123;</span><br><span class="line">    SET_REGISTER(vdst, 0);</span><br><span class="line">&#125; else &#123;</span><br></pre></td></tr></table></figure>
+
+<p>我们知道，在C++中，true即为1，false即为0，也就是说这行代码代表着所有空对象不是任何类的实例。</p>
+<p>显然这两行代码是相矛盾的，而我们的字节码是由dalvik虚拟机执行的，因此需要以dalvik虚拟机为准，这样大家应该知道怎么处理了吧？</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/05/11/android-asm-04-5",
+        distractionFreeMode: true,
+        title: "4.5、重构为本地方法",
+        body: "http://noverguo.github.io/2015/05/11/android-asm-04-5/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

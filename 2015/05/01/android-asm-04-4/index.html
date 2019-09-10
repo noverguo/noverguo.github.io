@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>4.4、合并方法 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言合并方法指的是把多个方法合并成一个方法，从而达到减少方法数量，增加分析难度的目的。前面提到过，Android中Dex有65536个方法数量的限制，因而进行方法合并有利于缓解此限制。另外上一章提到的重构方法方案会大量的增加方法，如果把增加的方法进行合并，那么可缓解增加方法的数量。一些问题合并方法时，需要修改合并后的方法签名，而有些方法是对外提供的接口，是不能合并的。如Android中的Activity等四大组件中继承的一些特定方法，插件化框架中对外提供的接口等等。被合并方法选择1、...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#一些问题"><span class="toc-number">2.</span> <span class="toc-text">一些问题</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#被合并方法选择"><span class="toc-number">3.</span> <span class="toc-text">被合并方法选择</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#合并原理（基于bytecode）"><span class="toc-number">4.</span> <span class="toc-text">合并原理（基于bytecode）</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#合并方案说明"><span class="toc-number">5.</span> <span class="toc-text">合并方案说明</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            4.4、合并方法
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/05/01/android-asm-04-4/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-05-01T00:00:00.000Z" itemprop="datePublished">2015-05-01</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>合并方法指的是把多个方法合并成一个方法，从而达到减少方法数量，增加分析难度的目的。</p>
+<p>前面提到过，Android中Dex有65536个方法数量的限制，因而进行方法合并有利于缓解此限制。另外上一章提到的重构方法方案会大量的增加方法，如果把增加的方法进行合并，那么可缓解增加方法的数量。</p>
+<h1 id="一些问题"><a href="#一些问题" class="headerlink" title="一些问题"></a>一些问题</h1><p>合并方法时，需要修改合并后的方法签名，而有些方法是对外提供的接口，是不能合并的。如Android中的Activity等四大组件中继承的一些特定方法，插件化框架中对外提供的接口等等。</p>
+<h1 id="被合并方法选择"><a href="#被合并方法选择" class="headerlink" title="被合并方法选择"></a>被合并方法选择</h1><p>1、只要被Proguard混淆过的方法，大部分都可以进行合并，而未混淆的代码，则由于可能有各种各样的潜规则（如JNI或其它地方反射调用该方法、作为插件化框架所提供的接口等），而需要通过配置Keep住。</p>
+<p>2、没继承关系的方法，皆可进行处理。</p>
+<p>3、有继承关系的方法，虽有部分能处理，但经测试量较少，且处理成本非常大，因而不建议处理。</p>
+<p>4、重构产生的方法，均可以进行合并处理</p>
+<a id="more"></a>
+
+
+<h1 id="合并原理（基于bytecode）"><a href="#合并原理（基于bytecode）" class="headerlink" title="合并原理（基于bytecode）"></a>合并原理（基于bytecode）</h1><p>1、实例方法–&gt;静态方法：<br>前：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">class Book &#123;</span><br><span class="line">    int n;</span><br><span class="line">    int add(int b) &#123;</span><br><span class="line">        return n + b;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">class com/tencent/Book &#123;</span><br><span class="line">  I n</span><br><span class="line">  add(I)I</span><br><span class="line">    ALOAD 0</span><br><span class="line">    GETFIELD com/tencent/Book.n : I</span><br><span class="line">    ILOAD 1</span><br><span class="line">    IADD</span><br><span class="line">    IRETURN</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">class Book&#123;</span><br><span class="line">    int n;</span><br><span class="line">    static int add(Book a, int b) &#123;</span><br><span class="line">        return a.n+b;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">class com/tencent/Book &#123;</span><br><span class="line">  I n</span><br><span class="line">  static add(Lcom/tencent/Book;I)I</span><br><span class="line">    ALOAD 0</span><br><span class="line">    GETFIELD com/tencent/Book.n : I</span><br><span class="line">    ILOAD 1</span><br><span class="line">    IADD</span><br><span class="line">    IRETURN</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们看到，实例方法转静态方法基本没什么要改的，只需要把方法的权限改为静态的，然后在方法参数最前面增加一个当前类的对象参数(即this指针)。</p>
+<p>2、多个方法–&gt;一个方法（通用方案）:<br>合并前:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static long add(int a, long b) &#123;</span><br><span class="line">    return a+b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">static add(IL)L</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static long print(String str, long k) &#123;</span><br><span class="line">    return str.length() - k;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">static print(Ljava/lang/String;L)L</span><br><span class="line">    ALOAD 0</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LSUB</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<p>合并后:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">static long merge(int which, int a, long b, String str) &#123;</span><br><span class="line">     switch(which) &#123;</span><br><span class="line">     case 0:</span><br><span class="line">          return a+b;</span><br><span class="line">     case 1:</span><br><span class="line">          return str.length() - k;</span><br><span class="line">     default:</span><br><span class="line">          return 0;</span><br><span class="line">     &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">static merge(IIJLjava/lang/String;)J</span><br><span class="line">L0</span><br><span class="line">    ILOAD 0</span><br><span class="line">    TABLESWITCH</span><br><span class="line">      0: L1</span><br><span class="line">      1: L2</span><br><span class="line">      default: L3</span><br><span class="line">L1</span><br><span class="line">    ILOAD 1</span><br><span class="line">    LLOAD 2</span><br><span class="line">    LSTORE 1</span><br><span class="line">    ISTORE 0</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br><span class="line">L2</span><br><span class="line">    ALOAD 4</span><br><span class="line">    LLOAD 2</span><br><span class="line">    LSTORE 1</span><br><span class="line">    ASTORE 0</span><br><span class="line">    ALOAD 0</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LSUB</span><br><span class="line">    LRETURN</span><br><span class="line">L3</span><br><span class="line">    LCONST_0</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<p>这个方案支持任意两个方法进行合并，原理是把第一个参数作为识别当前调用的是哪个方法，接着通过switch语句来跳转到对应的代码，然后把新方法的参数加载到对应的栈中，并重新保存成原方法需要的参数位置，这样原方法的代码就全部都不用改了。</p>
+<p>注意下，这里用于识别旧方法的参数也可以放在最后面，如果放到最后面，且参数位置安排得当的话，可以减少一些修复指令。</p>
+<p>上面限定了返回值一致的方法才能合并，其实返回值不一致的也能合并，不过还需要增加不少额外的处理。这里建议返回值为基本数据类型时，需要一致才进行合并，如果返回值为对象类型时，就返回Object就行，这样只需在修复调用该方法的返回值时增加一个强制类型转换。</p>
+<p>同理，如果参数为对象类型，那么都可以当作Object类型，然后再在修复时转换为相应的类型。</p>
+<p>3、多个方法–&gt;一个方法（start with方案）:<br>合并前:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static long add(int a, long b) &#123;</span><br><span class="line">    return a+b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">static add(IL)L</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static long print(int m, long k, String str) &#123;</span><br><span class="line">    return str.length() - k + m;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">static print(Ljava/lang/String;L)L</span><br><span class="line">    ALOAD 3</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LSUB</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<p>合并后:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">static long merge(int a, long b, String str, int which) &#123;</span><br><span class="line">     switch(which) &#123;</span><br><span class="line">     case 0:</span><br><span class="line">          return a+b;</span><br><span class="line">     case 1:</span><br><span class="line">          return str.length() - b + a;</span><br><span class="line">     default:</span><br><span class="line">          return 0;</span><br><span class="line"></span><br><span class="line">     &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">static merge(IJLjava/lang/String;I)J</span><br><span class="line">L0</span><br><span class="line">    ILOAD 4</span><br><span class="line">    TABLESWITCH</span><br><span class="line">      0: L1</span><br><span class="line">      1: L2</span><br><span class="line">      default: L3</span><br><span class="line">L1</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br><span class="line">L2</span><br><span class="line">    ALOAD 3</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I</span><br><span class="line">    I2L</span><br><span class="line">    LLOAD 1</span><br><span class="line">    LSUB</span><br><span class="line">    ILOAD 0</span><br><span class="line">    I2L</span><br><span class="line">    LADD</span><br><span class="line">    LRETURN</span><br><span class="line">L3</span><br><span class="line">    LCONST_0</span><br><span class="line">    LRETURN</span><br></pre></td></tr></table></figure>
+
+<p>这个方案要求待合并的方法的参数必须是start with类型（以最长的方法参数为基准，其它方法的参数必须与其前面的参数一一对应）。假设一个最长的方法的参数为IJI，那么参数为IJI、IJ、I的方法才能和它进行合并。</p>
+<p>显然，这种方案少了很多修复指令，不过会有一定限制，但经测试发现，使用这种方案进行合并后方法数比通用方案只差一点点，但增加的体积相对通用方案明显少了很多，因此建议优先使用。</p>
+<p>4、可内联方法插入到方法调用的位置：</p>
+<p>内联方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static long add(int a, long b) &#123;</span><br><span class="line">    return a+b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">static add(II)I</span><br><span class="line">    ILOAD 0</span><br><span class="line">    ILOAD 1</span><br><span class="line">    IADD</span><br><span class="line">    IRETURN</span><br></pre></td></tr></table></figure>
+
+<p>调用方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static int count(int a, int b, int c) &#123;</span><br><span class="line">    return add(add(a,b),add(b,c));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">static count(III)I</span><br><span class="line">    ILOAD 0</span><br><span class="line">    ILOAD 1</span><br><span class="line">    INVOKESTATIC Main.add (II)I</span><br><span class="line">    ILOAD 1</span><br><span class="line">    ILOAD 2</span><br><span class="line">    INVOKESTATIC Main.add (II)I</span><br><span class="line">    INVOKESTATIC Main.add (II)I</span><br><span class="line">    IRETURN</span><br></pre></td></tr></table></figure>
+
+<p>内联方法指令合并到调用方法后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static int count(int a, int b, int c) &#123;</span><br><span class="line">    return (a+b) + (b+c)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">static count(III)I</span><br><span class="line">    ILOAD 0</span><br><span class="line">    ILOAD 1</span><br><span class="line">    ISTORE 3</span><br><span class="line">    ISTORE 4</span><br><span class="line">    ILOAD 4</span><br><span class="line">    ILOAD 3</span><br><span class="line">    IADD</span><br><span class="line">    ILOAD 1</span><br><span class="line">    ILOAD 2</span><br><span class="line">    ISTORE 3</span><br><span class="line">    ISTORE 4</span><br><span class="line">    ILOAD 4</span><br><span class="line">    ILOAD 3</span><br><span class="line">    IADD</span><br><span class="line">    ISTORE 3</span><br><span class="line">    ISTORE 4</span><br><span class="line">    ILOAD 4</span><br><span class="line">    ILOAD 3</span><br><span class="line">    IADDd</span><br><span class="line">    IRETURN</span><br></pre></td></tr></table></figure>
+
+<p>内联方法是指指令比较少的方法，上例中通过增加本地变量来模拟内联方法的参数，当然，使用到参数的指令都需要一一进行修改，如果内联方法有临时变量，也需要把临时变量的位置修改一下。</p>
+<h1 id="合并方案说明"><a href="#合并方案说明" class="headerlink" title="合并方案说明"></a>合并方案说明</h1><p>1、通用方案会增加非常多的指令，以致于dex体积增加，而除了65536方法数限制外，还有个5M线性内存的限制，因此通用方案可能会导致提前达到5M的限制，不建议使用。</p>
+<p>2、内联方法方案在处理插件化框架中，修复成本非常高，且经测试，可内联的方法比例非常低。</p>
+<p>3、上面方案中，都是针对没继承关系的来处理，并没列出有继承关系的处理方案，当然有兴趣的可找我拿或自行研究下。这里不列出是因为此方案能处理的方法比例非常不高，且处理成本非常大，因而不建议使用。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/05/01/android-asm-04-4",
+        distractionFreeMode: true,
+        title: "4.4、合并方法",
+        body: "http://noverguo.github.io/2015/05/01/android-asm-04-4/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

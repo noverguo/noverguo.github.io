@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>照片相似识别技术研究 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言15年7月时，那时刚去完团建，想到一个很有用的需求：照片按人脸自动分类。不过之前没怎么研究过图像处理方面的知识，就想着先从简单的照片处理相关的功能入手。之后在研究市面上是否已经有相应的产品时，发现手管、360、猎豹等都已经有做相似照片清理的功能，于是人为地通过大量数据进行测试对比。结果发现它们的运行速度都很不错，但要么误判率较高，要么覆盖率过低，这估计是速度与结果之间以速度优先。那时就想，这结果看起来不错，但图片一多，需要人工参与得就越多，那能不能尽量更自动化一些，同时速度上也不至于难...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#相似照片"><span class="toc-number">2.</span> <span class="toc-text">相似照片</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#算法比较"><span class="toc-number">3.</span> <span class="toc-text">算法比较</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#优化误判率"><span class="toc-number">4.</span> <span class="toc-text">优化误判率</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#优化覆盖率"><span class="toc-number">5.</span> <span class="toc-text">优化覆盖率</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#默认清理选项"><span class="toc-number">6.</span> <span class="toc-text">默认清理选项</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#体验包"><span class="toc-number">7.</span> <span class="toc-text">体验包</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            照片相似识别技术研究
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/12/03/photo-similar/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-12-03T00:00:00.000Z" itemprop="datePublished">2015-12-03</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/colorF/">colorF</a>, <a class="article-tag-link" href="/tags/phash/">phash</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>15年7月时，那时刚去完团建，想到一个很有用的需求：照片按人脸自动分类。不过之前没怎么研究过图像处理方面的知识，就想着先从简单的照片处理相关的功能入手。之后在研究市面上是否已经有相应的产品时，发现手管、360、猎豹等都已经有做相似照片清理的功能，于是人为地通过大量数据进行测试对比。结果发现它们的运行速度都很不错，但要么误判率较高，要么覆盖率过低，这估计是速度与结果之间以速度优先。那时就想，这结果看起来不错，但图片一多，需要人工参与得就越多，那能不能尽量更自动化一些，同时速度上也不至于难以接受呢？</p>
+<p>目前市面上的实现主要是基于phash算法的（感知哈希算法），phash算法的特点是速度快，准确性较高。除此以外，常见的hash算法还有ahash算法，dhash算法，参见：<br> <a href="http://blog.csdn.net/zmazon/article/details/8618775" target="_blank" rel="noopener">相似图片搜索的三种哈希算法</a></p>
+<p>不过ahash算法与dhash算法虽然速度较phash算法要快些，但测试发现效果并不理想。之后从一位以前曾在百度工作过的大牛了解到，百度的图片相似搜索是基于phash进行改进的，这也显现出phash算法在照片相似识别上的独特优势。</p>
+<a id="more"></a>
+
+<h1 id="相似照片"><a href="#相似照片" class="headerlink" title="相似照片"></a>相似照片</h1><p>相似照片可以大致分为3类：</p>
+<ol>
+<li>连续拍摄的照片（简称连拍照）。</li>
+<li>因手抖或因取景不满意等原因导致上下左右移到后重新拍摄后的照片（简称平移照）</li>
+<li>因取景不满意或不同时刻对同一景点进行拍摄等原因导致的在不同角度或不同位置拍同一景点的照片（简称角度照）</li>
+</ol>
+<h1 id="算法比较"><a href="#算法比较" class="headerlink" title="算法比较"></a>算法比较</h1><p>照片相似度识别的算法中，有不少算法效果非常好的算法，下面来讨论下：</p>
+<ol>
+<li><p>phash：<br> phash算法是针对压缩成32x32的灰度图进行处理，然后经过DCT或其它变换算法来降低频率，接着通过平均值求得两张照片的指纹，最后算出其相似度。<br> 相关链接：<a href="http://www.ruanyifeng.com/blog/2011/07/principle_of_similar_image_search.html" target="_blank" rel="noopener">相似图片搜索的原理</a></p>
+</li>
+<li><p>颜色分布直方图(colorFeature)（简称colorF）：<br> 颜色分布直方图是先把每种原色分成N个区（N=2^n，n越大，速度越慢，覆盖率越低，但准确性越高），由于有三种原色，因此一共有N^3种组合。接着对每个像素点的红绿蓝三原色分别计算其落左哪个区，并统计到对应的组合当中。然后把统计结果作为指纹，最后算出其相似度。<br> 简单地说，就是把所有颜色按一定比例进行分组，并统计每个分组的数量。如果两张图片相似，则其颜色分布肯定差别不大。<br> 相关链接：<a href="http://www.ruanyifeng.com/blog/2013/03/similar_image_search_part_ii.html" target="_blank" rel="noopener">相似图片搜索的原理（二）</a></p>
+</li>
+<li><p>SIFT：<br> SIFT算法相对比较复杂，且有专利，限于篇幅，就不细说。<br> SIFT效果非常好，不过速度比较慢。<br> 相关链接：<a href="http://blog.csdn.net/abcjennifer/article/details/7639681" target="_blank" rel="noopener">SIFT特征提取分析</a></p>
+</li>
+<li><p>ORB：<br> ORB算法同样比较复杂，好处是没有专利，限于篇幅，只说下大概原理。<br> ORB的原理是利用FAST算法提取特征点，然后选出最有用的，接着增加旋转不变性，再提取出特征描述子，最后根据描述子作对比。<br> 也就是说ORB是基于局部特征进行比较的，它与SIFT类似，效果非常不错，但速度有些慢，都是基于特征点，且具有旋转不变性。<br> 相关链接：<a href="http://www.cnblogs.com/ronny/p/4083537.html" target="_blank" rel="noopener">ORB特征点检测</a></p>
+</li>
+</ol>
+<p>上面4种算法是经过测试后发现效果比较令人满意的，不过SIFI是有专利的，且可以用ORB来代替，因此就不细说，有兴趣的可以测试下。</p>
+<p>前面说过，phash算法的误判率比较高，且覆盖率较低，这与它的算法思路是息息相关的：</p>
+<ul>
+<li>phash算法可以认为是基于轮廓的，或者可以认为是基于位置的，因此单单用phash进行计算会存在一定的误判率及非常低的覆盖率。</li>
+<li>假设两张照片总体轮廓非常相似，但主体内容的颜色完全不一样（简称同形照），这种情况phash会认为是相似的。这就是phash误判率较高的原因。</li>
+<li>同样的，对于相似照片来说，phash只能准确识别出连拍照，而不能识别出平移照和角度照。因此其覆盖率会比较低。</li>
+</ul>
+<p>虽然phash有一定的不足之处，但不可否认的是它的速度及连拍照的准确性。鉴于phash速度上的优势，我们可以把它作为第一步的过滤，然后利用其它算法来弥补它的不足之处。</p>
+<h1 id="优化误判率"><a href="#优化误判率" class="headerlink" title="优化误判率"></a>优化误判率</h1><p>两张照片相似，可以认为需要进行两个维度的对比，一是位置，二是颜色。也就是说，两张非常相似的照片（平移照和角度照先不考虑）同一个位置的像素点的颜色大部分应该是相似的（为什么是相似而不是相同？因为需要排除光照影响）。</p>
+<p>上面提到phash可以认为是基于位置的，而colorF则是根据颜色分布来进行计算相似度的，也就是说，假设两张照片相似，那么其phash和colorF也应该很相似，反之亦然。因此我们可以根据phash的结果，对其进行colorF的过滤，这样我们也可以处理掉同形照了，剩下的照片就是非常相似的照片了。</p>
+<h1 id="优化覆盖率"><a href="#优化覆盖率" class="headerlink" title="优化覆盖率"></a>优化覆盖率</h1><p>现在还有平移照和角度照还未能识别出来，但依赖phash是不可能的。</p>
+<p>前面提到了SIFT及ORB这两种基于特征点的算法，同时提到了其旋转不变性的特点，从网上借个图ORB算法的效果图说明下：<br><img src="/img/simarily_01.jpg" alt></p>
+<p>可以看到，ORB算法是对局部区域进行比对的，且不受图片旋转角度影响。因此ORB算法可以完全解决平移照和角度照。不过遗憾的是，ORB算法的速度比较慢，在sony Z2上平均每比较一次需要50ms，就也是说1秒中可以比较20次，假设有100张图片，如果算最坏的情况，需要两两比较，那么比较次数约为5000次，也就是说需要处理250秒，即4分多钟才能处理完。。。</p>
+<p>既然速度慢，就得想些办法进行优化。优化的切入点有两个，一是优化ORB的代码，二是优化比较次数。</p>
+<ul>
+<li>ORB在opencv中有提供，opencv是开源的，大牛们肯定会说改源码了。不过我这种小菜就算了，那就只有优化比较次数了。</li>
+</ul>
+<p>平移照其实可以当成是角度相同的角度照，因此先只考虑角度照就行了。</p>
+<p>其实可优化的点还是很多的，而且有不少点同样适用于phash与colorF双重比较的方案：</p>
+<ul>
+<li>两张照片相似，那么必定是拍同一景点，所以其定位必定是非常相近的.</li>
+<li>两张相似的照片，大体的颜色比例应该差得不多（即可通过colorF来筛选）。</li>
+<li>截图不处理</li>
+<li>我们可以限定两张相似的照片，应该是同一个摄像头拍的。</li>
+<li>我们可以限定两张相似的照片，应该是在一定时间内拍的。</li>
+<li>横着拍和竖着拍的两张照片，我们可以认为它们不相似。</li>
+<li>宽高不一样（即不是同一款软件或同方向拍的），甚至名字不类似，我们可以认为它们不相似。</li>
+</ul>
+<p>可能会有人觉得比较奇怪，有些限定感觉不是很合理。像宽高不一样的照片，为什么就认为不相似呢？这里其实就是计算机认为相似与用户认为相似的区别。对于用户来说，他有可能先拍了一张，然后再用美颜的功能PS一张，这时实际他可能会想两张都保留，而且我们比较难判定哪一张就应该保留，那还不如不告诉他这两张是相似的。当然也你可以把这结果显示出来，让用户自己选择。</p>
+<p>而且经过测试发现，这些条件对结果影响非常小（覆盖率能达到95%以上，甚至100%，误判率也在5%以内），但却大大提高了速度（测试发现至少能提高4倍速度）。</p>
+<p>测试结果：</p>
+<ul>
+<li>200张图，经过各种预处理后，ORB算法实际比较次数为1048次，总用时57.33秒。单算比较，不算预处理的平均时间为53.7ms，算上预处理的平均比较时间为54.7ms。</li>
+</ul>
+<h1 id="默认清理选项"><a href="#默认清理选项" class="headerlink" title="默认清理选项"></a>默认清理选项</h1><p>通过上面的算法，已经能找到相似的照片了，但对于用户来说，肯定希望说你能智能地告诉我到底要哪些可以直接清理，哪些应该保留或者由用户来选择清理。这里，我给出一个方案：</p>
+<p>首先，对于phash和colorF找出来的相似照片，由于它们的查找速度非常快，因此可以作为快速清理。而对于orb找出来的相似照片，由于查找速度非常慢，则可以作为深度清理。</p>
+<p>快速清理中，由于照片都可以认为是连拍的，因此看起来都应该是差不多的，但有可能会有某一张是比较模糊的，因此我们需要找到最清晰的那一张来保留。这里可以根据两张照片的模糊度（权重高些），对比度，亮度等综合来评价。至于评价算法我用的是之前一位同事预研的成果，就不在这献丑了。</p>
+<p>深度清理中，照片同样可以根据上面说的综合算法来找出最清晰的。不过有个问题，就是哪一些是应该清理的。快速清理的结果可以合并到深度清理当中，而其它的照片最简单的当然就是全部由用户自己选择了，或者说默认清理ORB算法认为相似度非常高的。</p>
+<p>现在默认清理的已经找到了，但对于人物照来说，效果并不理想，因为用户肯定是希望保留睁眼的和微笑的，这时可能就需要做闭眼识别和微笑检测了。</p>
+<p>不过闭眼识别和微笑检测都涉及到人脸检测的问题，经测试发现，人脸检测在手机端的速度非常慢。</p>
+<p>下面是把照片等比例压缩到最大宽高为500时在sony Z2手机上的测试结果：</p>
+<ul>
+<li>opencv的haar特征： 7~9s (PC上只需20ms左右)</li>
+<li>opencv的lbp特征： 0.9~1.3s (PC上不到10ms)</li>
+<li>face++的离线SDK库： 1~1.5s (PC上没测过)</li>
+<li>基于opencv的pico： 300ms~400ms (PC上没测试)</li>
+</ul>
+<p>注：haar之所以比lpb慢是因为lpb大部分是整型方面的运算，而haar基本都是浮点型的。</p>
+<p>测试结果发现终端的性能与PC有几百倍的性能差异，后来很好奇说单单做int型或float型运行是否有这种差异。后测试发现int型的差异在10倍左右，而float型则在7倍左右。也就是说实际上不应该出现这么大的差异的。</p>
+<p>之所以会出现这种测试结果，其实与指令集、opencv针对PC上专门做了优化等等有关。但优化是一件非常复杂的事情，所以如果要做，也只能针对一些简单的优化来做。如已经发现人脸的地方就直接跳过不再扫，参数方面的调整，颜色的过滤等等，这方面的优化目前我也暂时没时间做了（老大有新需求）。</p>
+<p>我这边采用真实用户拍摄的400张照片进行测试，其实有188张是相似的，实际找到相似的有185张（3张美颜的被过滤掉了），如果按我的标准来算，即不算美颜，只算连拍照、平移照、角度照的话，覆盖率能达到100%，准确率也能达到100%，至于默认勾选清理的，不考虑闭眼和微笑的问题，准确率达到95%，这里的准确是指我一眼就认为相似的，因此有一定的人为因素在内。</p>
+<h1 id="体验包"><a href="#体验包" class="headerlink" title="体验包"></a>体验包</h1><p>体验包中已经实现了上述大部分功能，同时还实现了截图、模糊照片、回收站的功能。<br>体验包下载链接：<br><a href="http://android.myapp.com/myapp/detail.htm?apkName=com.tencent.aladdin.phominator&apkCode=2" target="_blank" rel="noopener">应用宝</a><br>Google Play上的链接由于长时间无维护已失效</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/12/03/photo-similar",
+        distractionFreeMode: true,
+        title: "照片相似识别技术研究",
+        body: "http://noverguo.github.io/2015/12/03/photo-similar/",
+        labels: ["phash","colorF"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

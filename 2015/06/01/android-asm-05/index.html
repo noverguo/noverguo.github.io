@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>5、总结 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="回顾本系列文章到这里就已经到尾声了，在第二章时，我给大家介绍了很多相关的知识，这些知识是学习本系列文章的基础。接着在第三章中，我介绍了目前流行的相似度识别方案，并针对网上没开源的方案进行简单模拟实现。之后在第四章中，我介绍了一些代码混淆的方案，这些方案只是给大家个引子，希望大家能够举一反三，想出更多更好的方案。分析现在我们已经能够把代码混淆得面目全非了，但是怎么才能知道它的混淆效果了呢？一般做法有两种，一是人工分析，二是通过工具自动化分析。人工分析很难有个衡量标准，所以这里我打算使用工...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#回顾"><span class="toc-number">1.</span> <span class="toc-text">回顾</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#分析"><span class="toc-number">2.</span> <span class="toc-text">分析</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            5、总结
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/06/01/android-asm-05/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-06-01T00:00:00.000Z" itemprop="datePublished">2015-06-01</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h1><p>本系列文章到这里就已经到尾声了，在第二章时，我给大家介绍了很多相关的知识，这些知识是学习本系列文章的基础。接着在第三章中，我介绍了目前流行的相似度识别方案，并针对网上没开源的方案进行简单模拟实现。之后在第四章中，我介绍了一些代码混淆的方案，这些方案只是给大家个引子，希望大家能够举一反三，想出更多更好的方案。</p>
+<h1 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h1><p>现在我们已经能够把代码混淆得面目全非了，但是怎么才能知道它的混淆效果了呢？一般做法有两种，一是人工分析，二是通过工具自动化分析。</p>
+<p>人工分析很难有个衡量标准，所以这里我打算使用工具自动化分析。在第三章中，我介绍了一些相似度分析工具，这里我就用那三个相似度分析工具进行分析，并比较。</p>
+<p>接下来使用的混淆工具，都进行了随机混淆处理，也就是说两次分别处理的应用，混淆效果是不一样的，而后面的分析结果，除重打包是基于处理前后的应用外，其它都是基于两次分别处理的应用。</p>
+<p>下面是开源中国的测试结果：</p>
+<a id="more"></a>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>基于代码流</th>
+<th>基于变量计数</th>
+<th>基于API序列</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>重打包</td>
+<td>92.414%</td>
+<td>98.317%</td>
+<td>99.991%</td>
+</tr>
+<tr>
+<td>加密字符串</td>
+<td>80.703%</td>
+<td>98.635%</td>
+<td>99.880%</td>
+</tr>
+<tr>
+<td>反射属性</td>
+<td>79.878%</td>
+<td>97.770%</td>
+<td>91.986%</td>
+</tr>
+<tr>
+<td>反射方法</td>
+<td>69.122%</td>
+<td>94.892%</td>
+<td>76.282%</td>
+</tr>
+<tr>
+<td>指令替换</td>
+<td>92.718%</td>
+<td>99.802%</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>代码乱序</td>
+<td>86.923%</td>
+<td>100%</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>重构方法</td>
+<td>73.614%</td>
+<td>95.752%</td>
+<td>99.857%</td>
+</tr>
+<tr>
+<td>重构并合并方法</td>
+<td>74.938%</td>
+<td>93.792%</td>
+<td>98.704%</td>
+</tr>
+<tr>
+<td>重构到本地方法</td>
+<td>84.638%</td>
+<td>97.053%</td>
+<td>80.781%</td>
+</tr>
+<tr>
+<td>使用全部</td>
+<td>38.593%</td>
+<td>72.844%</td>
+<td>57.539%</td>
+</tr>
+</tbody></table>
+<p>我们看到反射调用的效果基本都比较不错，但反射调用对效率影响非常大，这里是5%左右的随机转换得出的结果，如果比例更高，效果更明显。</p>
+<p>这里的测试并没给出花指令，我们说过，代码乱序实际也是花指令的一种，这里也可以看到花指令对于基于代码流的方式有比较大的影响，而对基于变量与基于API序列看似没影响，实际是由于代码乱序所用的指令比较特殊，如果换成其它花指令，影响肯定是会有的。</p>
+<p>这里只对开源中国进行测试，有兴趣的可以测下其它应用，不过如果是比较大的应用的话，基于代码流的测试可能会失败，这一般是内存不足的原因。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/06/01/android-asm-05",
+        distractionFreeMode: true,
+        title: "5、总结",
+        body: "http://noverguo.github.io/2015/06/01/android-asm-05/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

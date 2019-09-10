@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>基于ASM修复Jar包的Bug(修改class文件) | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言同事发现了一个crash是来源于公司内某个闭源jar的，而负责此Jar开发的同事已经离职，难以找人修复，于是就想找我帮忙弄下。想修改class文件，方式很多，如Javassist、ASM等Javassist的修改是基于源代码，因此更容易上手，可参考修改jar的.class文件，并重新打包ASM则是直接基于java bytecode，复杂性相对高些，但几乎无所不能。若能理解ASM的设计的话，使用也并不复杂，不懂的可参考ASM库的介绍要实现的功能把uilib.doraemon...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#要实现的功能"><span class="toc-number">2.</span> <span class="toc-text">要实现的功能</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#思路"><span class="toc-number">3.</span> <span class="toc-text">思路</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#新建Java工程，并导入ASM库"><span class="toc-number">4.</span> <span class="toc-text">新建Java工程，并导入ASM库</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#加载Jar包并解析成List"><span class="toc-number">5.</span> <span class="toc-text">加载Jar包并解析成List</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#定位对应的类及其方法，并保存更改后的类和方法"><span class="toc-number">6.</span> <span class="toc-text">定位对应的类及其方法，并保存更改后的类和方法</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#定位要替换的代码"><span class="toc-number">7.</span> <span class="toc-text">定位要替换的代码</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#实现定位代码，并过滤掉旧的指令"><span class="toc-number">8.</span> <span class="toc-text">实现定位代码，并过滤掉旧的指令</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#新代码ASM实现"><span class="toc-number">9.</span> <span class="toc-text">新代码ASM实现</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#保存新的ClassNode到Jar中"><span class="toc-number">10.</span> <span class="toc-text">保存新的ClassNode到Jar中</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            基于ASM修复Jar包的Bug(修改class文件)
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2019/09/10/fixjarbug/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2019-09-10T00:00:00.000Z" itemprop="datePublished">2019-09-10</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Bytecode/">Bytecode</a>, <a class="article-tag-link" href="/tags/Jar包/">Jar包</a>, <a class="article-tag-link" href="/tags/修改class/">修改class</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>同事发现了一个crash是来源于公司内某个闭源jar的，而负责此Jar开发的同事已经离职，难以找人修复，于是就想找我帮忙弄下。<br>想修改class文件，方式很多，如Javassist、ASM等</p>
+<ul>
+<li>Javassist的修改是基于源代码，因此更容易上手，可参考<a href="https://www.cnblogs.com/baby123/p/10871154.html" target="_blank" rel="noopener">修改jar的.class文件，并重新打包</a></li>
+<li>ASM则是直接基于java bytecode，复杂性相对高些，但几乎无所不能。若能理解ASM的设计的话，使用也并不复杂，不懂的可参考<a href="/2015/01/13/android-asm-02-3/" title="ASM库的介绍">ASM库的介绍</a><a id="more"></a>
+
+</li>
+</ul>
+<h1 id="要实现的功能"><a href="#要实现的功能" class="headerlink" title="要实现的功能"></a>要实现的功能</h1><p>把uilib.doraemon.model.layer.CompositionLayer类的drawLayer方法中的代码</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">canvas.clipRect(this.originalClipRect, Op.REPLACE);</span><br></pre></td></tr></table></figure>
+
+<p>改为</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">if (VERSION.SDK_INT &gt;= 26) &#123;</span><br><span class="line">    canvas.clipRect(this.originalClipRect);</span><br><span class="line">&#125; else &#123;</span><br><span class="line">    canvas.clipRect(this.originalClipRect, Op.REPLACE);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><a href="https://www.jianshu.com/p/4c133f189f71" target="_blank" rel="noopener">bug修复方法出处</a></p>
+<h1 id="思路"><a href="#思路" class="headerlink" title="思路"></a>思路</h1><p>1、加载Jar包，并转换成ClassNode对象列表<br>2、找到uilib.doraemon.model.layer.CompositionLayer类对应的ClassNode，并遍历其所有方法<br>3、找到drawLayer，并定位到要替换的代码<br>4、对比替换前后的代码的ASM实现，并替换<br>5、用新的ClassNode生成新的jar包</p>
+<h1 id="新建Java工程，并导入ASM库"><a href="#新建Java工程，并导入ASM库" class="headerlink" title="新建Java工程，并导入ASM库"></a>新建Java工程，并导入ASM库</h1><p>这边用Android Studio直接开发<br>1、新建一个Java Library<br><img src="/img/as-new-java-lib.jpg" alt><br>2、导入ASM库，可到官网下载，也可在这直接下载<a href="https://raw.githubusercontent.com/noverguo/jdtools/master/merger/lib/asm-debug-all-5.0.2.jar" target="_blank" rel="noopener">asm lib</a><br>3、新建main入口类</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">package com.noverguo.asm;</span><br><span class="line"></span><br><span class="line">public class AsmMain &#123;</span><br><span class="line">    public static void main(String[] args) throws IOException &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="加载Jar包并解析成List"><a href="#加载Jar包并解析成List" class="headerlink" title="加载Jar包并解析成List"></a>加载Jar包并解析成List<classnode></classnode></h1><p>这里用到我以前写的一个<a href="https://raw.githubusercontent.com/noverguo/jdtools/master/merger/src/com/tencent/jazz/util/JarLoader.java" target="_blank" rel="noopener">JarLoader工具类</a></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">List&lt;ClassNode&gt; classNodes = JarLoader.loadJar(inJarPath);</span><br></pre></td></tr></table></figure>
+
+<h1 id="定位对应的类及其方法，并保存更改后的类和方法"><a href="#定位对应的类及其方法，并保存更改后的类和方法" class="headerlink" title="定位对应的类及其方法，并保存更改后的类和方法"></a>定位对应的类及其方法，并保存更改后的类和方法</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">List&lt;ClassNode&gt; changeNodes = new ArrayList&lt;&gt;();</span><br><span class="line">for (ClassNode cn : classNodes) &#123;</span><br><span class="line">    if (cn.name.equals(&quot;uilib/doraemon/model/layer/CompositionLayer&quot;)) &#123;</span><br><span class="line">        List&lt;MethodNode&gt; newMethods = new ArrayList&lt;&gt;();</span><br><span class="line">        for (MethodNode mn :cn.methods) &#123;</span><br><span class="line">            if (mn.name.equals(&quot;drawLayer&quot;)) &#123;</span><br><span class="line">                // 这里定位到了uilib.doraemon.model.layer.CompositionLayer类的drawLayer方法</span><br><span class="line">                MethodNode newMethodNode = new MethodNode(mn.access, mn.name, mn.desc, mn.signature, mn.exceptions.toArray(new String[0]));</span><br><span class="line">                // 这里需要实现新方法的修改</span><br><span class="line">                newMethods.add(newMethodNode);</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                newMethods.add(mn);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        cn.methods = newMethods;</span><br><span class="line">        changeNodes.add(cn);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="定位要替换的代码"><a href="#定位要替换的代码" class="headerlink" title="定位要替换的代码"></a>定位要替换的代码</h1><p>ASM操作的是字节码bytecode，因此先安装ASM bytecode online插件<br><img src="/img/as-asm-bytecode-online-01.jpg" alt></p>
+<p>在AndroidStudio中进入要修改的Jar包里的类，会自动反编译，如果没有反编译成功，可尝试安装jd-inteIIij插件<br>要修改的方法的实现如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">void drawLayer(Canvas canvas, Matrix parentMatrix, int parentAlpha) &#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    if (!this.originalClipRect.isEmpty()) &#123;</span><br><span class="line">        canvas.clipRect(this.originalClipRect, Op.REPLACE);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在此类中右键-点击【Show Bytecode outline】<br>定位到此方法对应的ASM实现，如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    mv = cw.visitMethod(0, &quot;drawLayer&quot;, &quot;(Landroid/graphics/Canvas;Landroid/graphics/Matrix;I)V&quot;, null, null);</span><br><span class="line">    mv.visitCode();</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">    mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Rect&quot;, &quot;isEmpty&quot;, &quot;()Z&quot;, false);</span><br><span class="line">    Label l14 = new Label();</span><br><span class="line">    mv.visitJumpInsn(Opcodes.IFNE, l14);</span><br><span class="line">    Label l15 = new Label();</span><br><span class="line">    mv.visitLabel(l15);</span><br><span class="line">    mv.visitLineNumber(100, l15);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/graphics/Region$Op&quot;, &quot;REPLACE&quot;, &quot;Landroid/graphics/Region$Op;&quot;);</span><br><span class="line">    mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;Landroid/graphics/Region$Op;)Z&quot;, false);</span><br><span class="line">    mv.visitInsn(Opcodes.POP);</span><br><span class="line">    mv.visitLabel(l14);</span><br><span class="line">    mv.visitLineNumber(102, l14);</span><br><span class="line">    </span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    mv.visitMaxs(5, 7);</span><br><span class="line">    mv.visitEnd();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，最终要替换的代码是这个</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Label l15 = new Label();</span><br><span class="line">mv.visitLabel(l15);</span><br><span class="line">mv.visitLineNumber(100, l15);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/graphics/Region$Op&quot;, &quot;REPLACE&quot;, &quot;Landroid/graphics/Region$Op;&quot;);</span><br><span class="line">mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;Landroid/graphics/Region$Op;)Z&quot;, false);</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br></pre></td></tr></table></figure>
+
+<p>这里我们看到一个可以非常准确定位的点：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv.visitLineNumber(100, l15);</span><br></pre></td></tr></table></figure>
+
+<p>这行的意思是接下来的代码在源码中的行号为100,主要用于调试定位</p>
+<h1 id="实现定位代码，并过滤掉旧的指令"><a href="#实现定位代码，并过滤掉旧的指令" class="headerlink" title="实现定位代码，并过滤掉旧的指令"></a>实现定位代码，并过滤掉旧的指令</h1><p>这里使用装饰器模式的实现方式，先new一个新的MethodNode，然后通过MethodVisitor拦截visitLineNumber，并标记为found。方便后续过滤掉不要的指令<br>这里以visitInsn作为过滤的出口，对应的是mv.visitInsn(Opcodes.POP);<br>这样旧的实现代码就会被清掉</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line">MethodNode newMethodNode = new MethodNode(mn.access, mn.name, mn.desc, mn.signature, mn.exceptions.toArray(new String[0]));</span><br><span class="line">mn.accept(new MethodVisitor(Opcodes.ASM5, newMethodNode) &#123;</span><br><span class="line">    boolean found = false;</span><br><span class="line">    @Override</span><br><span class="line">    public void visitLineNumber(int line, Label start) &#123;</span><br><span class="line">        super.visitLineNumber(line, start);</span><br><span class="line">        if (line == 100) &#123;</span><br><span class="line">            found = true;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    @Override</span><br><span class="line">    public void visitInsn(int opcode) &#123;</span><br><span class="line">        if (found) &#123;</span><br><span class="line">            found = false;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        super.visitInsn(opcode);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    @Override</span><br><span class="line">    public void visitVarInsn(int opcode, int var) &#123;</span><br><span class="line">        if (found) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        super.visitVarInsn(opcode, var);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    @Override</span><br><span class="line">    public void visitFieldInsn(int opcode, String owner, String name, String desc) &#123;</span><br><span class="line">        if (found) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        super.visitFieldInsn(opcode, owner, name, desc);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    @Override</span><br><span class="line">    public void visitMethodInsn(int opcode, String owner, String name, String desc) &#123;</span><br><span class="line">        if (found) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        super.visitMethodInsn(opcode, owner, name, desc);</span><br><span class="line">    &#125;</span><br><span class="line">    @Override</span><br><span class="line">    public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) &#123;</span><br><span class="line">        if (found) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        super.visitMethodInsn(opcode, owner, name, desc, itf);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h1 id="新代码ASM实现"><a href="#新代码ASM实现" class="headerlink" title="新代码ASM实现"></a>新代码ASM实现</h1><p>新代码的Java实现如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">if (VERSION.SDK_INT &gt;= 26) &#123;</span><br><span class="line">    canvas.clipRect(this.originalClipRect);</span><br><span class="line">&#125; else &#123;</span><br><span class="line">    canvas.clipRect(this.originalClipRect, Op.REPLACE);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里有个问题是，如何得到其对应的ASM实现？</p>
+<p>我们可以把反编译出来的代码，复制一份到新的类中，如uilib.doraemon.model.layer.CompositionLayer2</p>
+<p>由于此类用了很多安卓的类。因此建议直接在安卓项目中新建此类。当然也可人为导入android.jar到java项目中。</p>
+<p>之后在CompositionLayer2类中右键-点击【Show Bytecode outline】，即可找到新的实现</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">mv.visitLabel(l6);</span><br><span class="line">mv.visitLineNumber(99, l6);</span><br><span class="line">mv.visitFrame(Opcodes.F_CHOP, 1, null, 0, null);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Rect&quot;, &quot;isEmpty&quot;, &quot;()Z&quot;, false);</span><br><span class="line">Label l14 = new Label();</span><br><span class="line">mv.visitJumpInsn(Opcodes.IFNE, l14);</span><br><span class="line">Label l15 = new Label();</span><br><span class="line">mv.visitLabel(l15);</span><br><span class="line">mv.visitLineNumber(100, l15);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/os/Build$VERSION&quot;, &quot;SDK_INT&quot;, &quot;I&quot;);</span><br><span class="line">mv.visitIntInsn(Opcodes.BIPUSH, 26);</span><br><span class="line">Label l16 = new Label();</span><br><span class="line">mv.visitJumpInsn(Opcodes.IF_ICMPLT, l16);</span><br><span class="line">Label l17 = new Label();</span><br><span class="line">mv.visitLabel(l17);</span><br><span class="line">mv.visitLineNumber(101, l17);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;)Z&quot;, false);</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br><span class="line">mv.visitJumpInsn(Opcodes.GOTO, l14);</span><br><span class="line">mv.visitLabel(l16);</span><br><span class="line">mv.visitLineNumber(103, l16);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/graphics/Region$Op&quot;, &quot;REPLACE&quot;, &quot;Landroid/graphics/Region$Op;&quot;);</span><br><span class="line">mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;Landroid/graphics/Region$Op;)Z&quot;, false);</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">mv.visitLabel(l14);</span><br><span class="line">mv.visitLineNumber(102, l14);</span><br><span class="line">mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);</span><br><span class="line">mv.visitLdcInsn(&quot;CompositionLayer#draw&quot;);</span><br><span class="line">mv.visitMethodInsn(Opcodes.INVOKESTATIC, &quot;uilib/doraemon/L&quot;, &quot;endSection&quot;, &quot;(Ljava/lang/String;)F&quot;, false);</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br></pre></td></tr></table></figure>
+
+<p>现在，我们更改下visitLineNumber的实现，在找到后插入新的代码</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">@Override</span><br><span class="line">public void visitLineNumber(int line, Label start) &#123;</span><br><span class="line">    super.visitLineNumber(line, start);</span><br><span class="line">    if (line == 100) &#123;</span><br><span class="line">        found = true;</span><br><span class="line">        newCode();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">private void newCode() &#123;</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/os/Build$VERSION&quot;, &quot;SDK_INT&quot;, &quot;I&quot;);</span><br><span class="line">    mv.visitIntInsn(Opcodes.BIPUSH, 26);</span><br><span class="line">    Label l16 = new Label();</span><br><span class="line">    mv.visitJumpInsn(Opcodes.IF_ICMPLT, l16);</span><br><span class="line">    Label l17 = new Label();</span><br><span class="line">    mv.visitLabel(l17);</span><br><span class="line">    mv.visitLineNumber(101, l17);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">    mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;)Z&quot;, false);</span><br><span class="line">    mv.visitInsn(Opcodes.POP);</span><br><span class="line">    mv.visitJumpInsn(Opcodes.GOTO, l14);</span><br><span class="line">    mv.visitLabel(l16);</span><br><span class="line">    mv.visitLineNumber(103, l16);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 1);</span><br><span class="line">    mv.visitVarInsn(Opcodes.ALOAD, 0);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETFIELD, &quot;uilib/doraemon/model/layer/CompositionLayer&quot;, &quot;originalClipRect&quot;, &quot;Landroid/graphics/Rect;&quot;);</span><br><span class="line">    mv.visitFieldInsn(Opcodes.GETSTATIC, &quot;android/graphics/Region$Op&quot;, &quot;REPLACE&quot;, &quot;Landroid/graphics/Region$Op;&quot;);</span><br><span class="line">    mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, &quot;android/graphics/Canvas&quot;, &quot;clipRect&quot;, &quot;(Landroid/graphics/Rect;Landroid/graphics/Region$Op;)Z&quot;, false);</span><br><span class="line">    mv.visitInsn(Opcodes.POP);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面会显示l14找不到，因为这里的代码没定义，而l14实际上是在mv.visitInsn(Opcodes.POP);之后的旧代码里访问的，因此我们比较难拿到。<br>这里可以定义个新的Label解决</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Label newLabel = new Label()</span><br><span class="line">...</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br><span class="line">mv.visitJumpInsn(Opcodes.GOTO, newLabel);</span><br><span class="line">...</span><br><span class="line">mv.visitInsn(Opcodes.POP);</span><br><span class="line">mv.visitLabel(newLabel);</span><br></pre></td></tr></table></figure>
+
+<h1 id="保存新的ClassNode到Jar中"><a href="#保存新的ClassNode到Jar中" class="headerlink" title="保存新的ClassNode到Jar中"></a>保存新的ClassNode到Jar中</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">JarLoader.saveToJar(inJarPath, outJarPath, changeNodes);</span><br></pre></td></tr></table></figure>
+
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2019/09/10/fixjarbug",
+        distractionFreeMode: true,
+        title: "基于ASM修复Jar包的Bug(修改class文件)",
+        body: "http://noverguo.github.io/2019/09/10/fixjarbug/",
+        labels: ["ASM","Bytecode","Jar包","修改class"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

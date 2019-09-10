@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>4.3、重构方法 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言在各种IDE中，都会有重构代码到一个新方法的选项（以下简称为重构方法），如下面是eclipse的重构功能：重构方法可重复利用代码，优化软件设计，提高代码的可读性，使得功能扩展更容易等等。当然，过度地重构会使得代码变得难以阅读，难以定位出错的原因。可重构分析在进行重构之前，我们需要先分析方法中哪些代码是可以重构。可重构的代码有几个特点：1）不应该包含返回指令（因为此时还未知该代码重构后的返回值是什么）。2）重构代码外的跳转指令不能跳转到重构代码中，重构代码中的跳转指令只能跳转到重...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#可重构分析"><span class="toc-number">2.</span> <span class="toc-text">可重构分析</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#指令执行流程分析"><span class="toc-number">3.</span> <span class="toc-text">指令执行流程分析</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#重构方法思路"><span class="toc-number">4.</span> <span class="toc-text">重构方法思路</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#重构方法实例分析"><span class="toc-number">5.</span> <span class="toc-text">重构方法实例分析</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#权限问题"><span class="toc-number">6.</span> <span class="toc-text">权限问题</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#构造方法问题"><span class="toc-number">7.</span> <span class="toc-text">构造方法问题</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            4.3、重构方法
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/03/10/android-asm-04-3/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-03-10T00:00:00.000Z" itemprop="datePublished">2015-03-10</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>在各种IDE中，都会有重构代码到一个新方法的选项（以下简称为重构方法），如下面是eclipse的重构功能：<br><img src="/img/ec-refactor.png" alt></p>
+<p>重构方法可重复利用代码，优化软件设计，提高代码的可读性，使得功能扩展更容易等等。当然，过度地重构会使得代码变得难以阅读，难以定位出错的原因。</p>
+<h1 id="可重构分析"><a href="#可重构分析" class="headerlink" title="可重构分析"></a>可重构分析</h1><p>在进行重构之前，我们需要先分析方法中哪些代码是可以重构。可重构的代码有几个特点：</p>
+<p>1）不应该包含返回指令（因为此时还未知该代码重构后的返回值是什么）。</p>
+<p>2）重构代码外的跳转指令不能跳转到重构代码中，重构代码中的跳转指令只能跳转到重构代码中。</p>
+<p>3）代码前后堆栈平衡。</p>
+<p>4）最多只能有一个返回值，但可有多个参数。</p>
+<a id="more"></a>
+
+<p>由上面可以看出，为了分析出代码是否可重构，我们需要知道一些信息：</p>
+<p>1）代码是否包含返回指令。</p>
+<p>2）代码中跳转指令的引用是否符合要求。</p>
+<p>3）代码前后栈的内容。</p>
+<p>4）代码中读取的值和写入的值，且读取的值来自于其它代码，写入的值被其它代码所使用。</p>
+<p>第1条最简单，直接过滤下是否包含返回指令就行。</p>
+<p>第2条需要分析所有跳转指令，然后看下跳转的位置是否符合要求。</p>
+<p>第3、4条需要分析指令执行流程，并计算出指令执行前后本地变量以及栈中的变化。</p>
+<h1 id="指令执行流程分析"><a href="#指令执行流程分析" class="headerlink" title="指令执行流程分析"></a>指令执行流程分析</h1><p>每条指令执行完成后，都可能伴随着本地变量或栈的变化，记录这执行过程中各个状态的变化，对我们分析堆栈平衡或读写本地变量都有一定好处。</p>
+<p>如果代码只是简单的顺序执行，那么处理起来就非常容易了。不过在很多情况下，代码都不会这么简单，而是有很多复杂的跳转。如何处理这些复杂的逻辑，并记录下相应的状态变化，就有点麻烦。</p>
+<p>我们可以借鉴下ASM框架中的Analyzer.findSubroutine方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line">private void findSubroutine(int insn, final Subroutine sub, final List&lt;AbstractInsnNode&gt; calls) throws AnalyzerException &#123;</span><br><span class="line">    while (true) &#123;</span><br><span class="line">        if (insn &lt; 0 || insn &gt;= n) &#123;</span><br><span class="line">            throw new AnalyzerException(null, &quot;Execution can fall off end of the code&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">        if (subroutines[insn] != null) &#123;</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        subroutines[insn] = sub.copy();</span><br><span class="line">        AbstractInsnNode node = insns.get(insn);</span><br><span class="line"></span><br><span class="line">        // calls findSubroutine recursively on normal successors</span><br><span class="line">        if (node instanceof JumpInsnNode) &#123;</span><br><span class="line">            if (node.getOpcode() == JSR) &#123;</span><br><span class="line">                // do not follow a JSR, it leads to another subroutine!</span><br><span class="line">                calls.add(node);</span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                JumpInsnNode jnode = (JumpInsnNode) node;</span><br><span class="line">                findSubroutine(insns.indexOf(jnode.label), sub, calls);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; else if (node instanceof TableSwitchInsnNode) &#123;</span><br><span class="line">            TableSwitchInsnNode tsnode = (TableSwitchInsnNode) node;</span><br><span class="line">            findSubroutine(insns.indexOf(tsnode.dflt), sub, calls);</span><br><span class="line">            for (int i = tsnode.labels.size() - 1; i &gt;= 0; --i) &#123;</span><br><span class="line">                LabelNode l = tsnode.labels.get(i);</span><br><span class="line">                findSubroutine(insns.indexOf(l), sub, calls);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; else if (node instanceof LookupSwitchInsnNode) &#123;</span><br><span class="line">            LookupSwitchInsnNode lsnode = (LookupSwitchInsnNode) node;</span><br><span class="line">            findSubroutine(insns.indexOf(lsnode.dflt), sub, calls);</span><br><span class="line">            for (int i = lsnode.labels.size() - 1; i &gt;= 0; --i) &#123;</span><br><span class="line">                LabelNode l = lsnode.labels.get(i);</span><br><span class="line">                findSubroutine(insns.indexOf(l), sub, calls);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        // calls findSubroutine recursively on exception handler successors</span><br><span class="line">        List&lt;TryCatchBlockNode&gt; insnHandlers = handlers[insn];</span><br><span class="line">        if (insnHandlers != null) &#123;</span><br><span class="line">            for (int i = 0; i &lt; insnHandlers.size(); ++i) &#123;</span><br><span class="line">                TryCatchBlockNode tcb = insnHandlers.get(i);</span><br><span class="line">                findSubroutine(insns.indexOf(tcb.handler), sub, calls);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        // if insn does not falls through to the next instruction, return.</span><br><span class="line">        switch (node.getOpcode()) &#123;</span><br><span class="line">        case GOTO:</span><br><span class="line">        case RET:</span><br><span class="line">        case TABLESWITCH:</span><br><span class="line">        case LOOKUPSWITCH:</span><br><span class="line">        case IRETURN:</span><br><span class="line">        case LRETURN:</span><br><span class="line">        case FRETURN:</span><br><span class="line">        case DRETURN:</span><br><span class="line">        case ARETURN:</span><br><span class="line">        case RETURN:</span><br><span class="line">        case ATHROW:</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">        insn++;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码中的执行流程如下：</p>
+<p>1）取出当前指令结点。</p>
+<p>2）如果是包含跳转的结点，则递归调用本流程，到要跳转的位置处执行。</p>
+<p>3）如果是返回、goto、switch等相关指令，则结束。</p>
+<p>4）当前结点指向下一条指令，并跳回1执行。</p>
+<p>借鉴此思路，我们就可以写出相应的记录状态信息的代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line">InsnList insns;</span><br><span class="line">TryCatchBlockNode[][] handlers;</span><br><span class="line">public void calculateSubroutine(int insn) &#123;</span><br><span class="line">endLoop:    while(true) &#123;</span><br><span class="line">        // TODO 如果此指令已经执行过了，则应该退出执行，以免死循环了。</span><br><span class="line">        ...</span><br><span class="line">        AbstractInsnNode node = insns.get(insn);</span><br><span class="line">        // TODO 模拟执行指令，并记录local和stack等的状态信息</span><br><span class="line">        ...</span><br><span class="line">        int opcode = node.getOpcode();</span><br><span class="line">        int t = node.getType();</span><br><span class="line">        if(t == AbstractInsnNode.JUMP_INSN) &#123;</span><br><span class="line">            if(opcode != JSR) &#123;</span><br><span class="line">                JumpInsnNode jnode = (JumpInsnNode) node;</span><br><span class="line">                calculateSubroutine(insns.indexOf(jnode.label));</span><br><span class="line">            &#125;</span><br><span class="line">            if(opcode == JSR || opcode == GOTO) &#123;</span><br><span class="line">                break;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; else if(t == AbstractInsnNode.TABLESWITCH_INSN) &#123;</span><br><span class="line">            TableSwitchInsnNode tsnode = (TableSwitchInsnNode) node;</span><br><span class="line">            calculateSubroutine(insns.indexOf(tsnode.dflt));</span><br><span class="line">                for (int i = tsnode.labels.size() - 1; i &gt;= 0; --i) &#123;</span><br><span class="line">                    calculateSubroutine(insns.indexOf(tsnode.labels.get(i)));</span><br><span class="line">                &#125;</span><br><span class="line">        &#125; else if(t == AbstractInsnNode.LOOKUPSWITCH_INSN) &#123;</span><br><span class="line">            LookupSwitchInsnNode lsnode = (LookupSwitchInsnNode) node;</span><br><span class="line">            calculateSubroutine(insns.indexOf(lsnode.dflt));</span><br><span class="line">                for (int i = lsnode.labels.size() - 1; i &gt;= 0; --i) &#123;</span><br><span class="line">                    calculateSubroutine(insns.indexOf(lsnode.labels.get(i)));</span><br><span class="line">                &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        if(handlers[insn] != null) &#123;</span><br><span class="line">            for(TryCatchBlockNode tcbn : handlers[insn]) &#123;</span><br><span class="line">                calculateSubroutine(insns.indexOf(tcbn.handler));</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        switch (opcode) &#123;</span><br><span class="line">        case GOTO:</span><br><span class="line">        case RET:</span><br><span class="line">        case TABLESWITCH:</span><br><span class="line">        case LOOKUPSWITCH:</span><br><span class="line">        case IRETURN:</span><br><span class="line">        case LRETURN:</span><br><span class="line">        case FRETURN:</span><br><span class="line">        case DRETURN:</span><br><span class="line">        case ARETURN:</span><br><span class="line">        case RETURN:</span><br><span class="line">        case ATHROW:</span><br><span class="line">            break endLoop;</span><br><span class="line">        &#125;</span><br><span class="line">        ++insn;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里只是给个思路，至于具体怎么记录状态信息，就要看实际需要来处理了。我们需要的是记录栈、本地变量、本地变量读写等的状态信息。</p>
+<p>有了每条指令执行前后的栈状态信息后，就可以找到栈平衡的两个点了，为了简单起见，建议以栈为空作为栈平衡的点。另外根据每条指令执行前后的读写状态信息，我们可以识别出某段代码相对于其它代码有参与读写操作的本地变量有哪些，从而识别出是否满足返回值只有一个（写入操作），参数多个（读取操作）的情况。</p>
+<p>通过上面的方案，我们就可以识别出可重构的代码，并识别出相应的参数与返回值，具体实现代码比较长，就不一一贴出来了，建议大家自己试着实现下。</p>
+<h1 id="重构方法思路"><a href="#重构方法思路" class="headerlink" title="重构方法思路"></a>重构方法思路</h1><p>找出可重构的代码后，我们需要识别出相应的参数与返回值，这样我们就可以开始重构方法了。重构方法的思路如下：</p>
+<p>1）在类中产生一个新的公有静态方法。</p>
+<p>2）把重构的指令一一写入新的方法中，并根据参数的位置修复对应的本地变量。</p>
+<p>3）如果新方法有返回值，则把返回值加载到栈中，并返回。</p>
+<p>4）在旧方法中，去掉用于重构的指令，并把需要用于作为参数的本地变量依次加载到栈中，然后调用新的方法。</p>
+<p>5）如果新方法有返回值，则把返回值保存到相应的本地变量中。</p>
+<h1 id="重构方法实例分析"><a href="#重构方法实例分析" class="headerlink" title="重构方法实例分析"></a>重构方法实例分析</h1><p>单单看思路或许会感觉有点晕，下面用相应的实例解释一下。</p>
+<p>假设有如下方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">public static void test(String[] args) &#123;</span><br><span class="line">    int i = args.length;</span><br><span class="line">    if(i &lt; 1) &#123;</span><br><span class="line">        return;</span><br><span class="line">    &#125;</span><br><span class="line">    for(String arg : args) &#123;</span><br><span class="line">        i += arg.length();</span><br><span class="line">    &#125;</span><br><span class="line">    System.out.println(i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>现希望把for循环重构成一个名为addLen的方法，效果如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">public static void test(String[] args) &#123;</span><br><span class="line">    int i = args.length;</span><br><span class="line">    if(i &lt; 1) &#123;</span><br><span class="line">        return;</span><br><span class="line">    &#125;</span><br><span class="line">    i = addLen(args, i);</span><br><span class="line">    System.out.println(i);</span><br><span class="line">&#125;</span><br><span class="line">public static int addLen(String[] args, int i) &#123;</span><br><span class="line">    for(String arg : args) &#123;</span><br><span class="line">        i += arg.length();</span><br><span class="line">    &#125;</span><br><span class="line">    return i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>看Java代码非常容易理解，我们先看看重构前的字节码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">public static test([Ljava/lang/String;)V</span><br><span class="line">   L0</span><br><span class="line">    ALOAD 0                             R.....|</span><br><span class="line">    ARRAYLENGTH                                 R.....|R</span><br><span class="line">    ISTORE 1                                R.....|I</span><br><span class="line">   L1</span><br><span class="line">    ILOAD 1                             RI....|</span><br><span class="line">    ICONST_1                                RI....|I</span><br><span class="line">    IF_ICMPGE L2                            RI....|II</span><br><span class="line">   L3</span><br><span class="line">    RETURN                              RI....|</span><br><span class="line">   L2</span><br><span class="line">    ALOAD 0                             RI....|</span><br><span class="line">    DUP                                 RI....|R</span><br><span class="line">    ASTORE 5                                RI....|RR</span><br><span class="line">    ARRAYLENGTH                                 RI...R|R</span><br><span class="line">    ISTORE 4                                RI...R|I</span><br><span class="line">    ICONST_0                                RI..IR|</span><br><span class="line">    ISTORE 3                                RI..IR|I</span><br><span class="line">    GOTO L4                             RI.IIR|</span><br><span class="line">   L5</span><br><span class="line">    ALOAD 5                             RI.IIR|</span><br><span class="line">    ILOAD 3                             RI.IIR|R</span><br><span class="line">    AALOAD                              RI.IIR|RI</span><br><span class="line">    ASTORE 2                                RI.IIR|R</span><br><span class="line">   L6</span><br><span class="line">    ILOAD 1                             RIRIIR|</span><br><span class="line">    ALOAD 2                             RIRIIR|I</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I   RIRIIR|IR</span><br><span class="line">    IADD                                RIRIIR|II</span><br><span class="line">    ISTORE 1                                RIRIIR|I</span><br><span class="line">   L7</span><br><span class="line">    IINC 3 1                                RIRIIR|</span><br><span class="line">   L4</span><br><span class="line">    ILOAD 3                             RI.IIR|</span><br><span class="line">    ILOAD 4                             RI.IIR|I</span><br><span class="line">    IF_ICMPLT L5                            RI.IIR|II</span><br><span class="line">   L8</span><br><span class="line">    GETSTATIC java/lang/System.out : Ljava/io/PrintStream;          RI.IIR|</span><br><span class="line">    ILOAD 1                             RI.IIR|R</span><br><span class="line">    INVOKEVIRTUAL java/io/PrintStream.println (I)V                  RI.IIR|RI</span><br><span class="line">   L9</span><br><span class="line">    RETURN                              RI.IIR|</span><br></pre></td></tr></table></figure>
+
+<p>在每条字节码后面，都包括了执行该字节码前的状态信息，其中’|’左边的是本地变量的状态，右边的是栈的状态。根据这些信息，我们可以发现栈为空的字节码有很多，而加粗的则是我们想找的。</p>
+<p>需要注意的是，我们取的是[n,m)这样的方式，即不包括GetStatic这条指令。这是因为我们要求执行第一条指令前的栈为空，执行最后一条指令后的栈为空，而该状态信息是代表执行前的，所以说栈为空的指令的前一条，才是我们需要的最后一条指令。</p>
+<p>也就是说，L2~L8就是我们需要重构的代码。</p>
+<p>接下来，我们不看重构后的字节码，而是按上面所说的方式进行重构试试。</p>
+<p>1）待重构的代码中不带有返回等指令，满足条件。</p>
+<p>2）待重构的代码中跳转指令的引用符合要求。</p>
+<p>3）待重构的代码执行前后栈为空，满足条件。</p>
+<p>4）待重构的代码中，读取执行前已存在的本地变量有0和1，写入执行前已存在且执行后会读取的本地变量有1，即参数为0和1，返回值为1。（这里的0和1代表的是本地变量的位置）</p>
+<p>我们接着来分析下参数，第0号位的值来自于原方法的第1个参数，是个字符串数组类型([Ljava/lang/String;)，第1号位的值来自于前面的ARRAYLENGTH方法，为整型值。</p>
+<p>同样的，返回值是个整形值，所以方法的描述就有了：([Ljava/lang/String;I)I</p>
+<p>这样，我们就可以把L2~L8的指令改一下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">public static test([Ljava/lang/String;)V</span><br><span class="line">   L0</span><br><span class="line">    ALOAD 0                             R.....|</span><br><span class="line">    ARRAYLENGTH                                 R.....|R</span><br><span class="line">    ISTORE 1                                R.....|I</span><br><span class="line">   L1</span><br><span class="line">    ILOAD 1                             RI....|</span><br><span class="line">    ICONST_1                                RI....|I</span><br><span class="line">    IF_ICMPGE L2                            RI....|II</span><br><span class="line">   L3</span><br><span class="line">    RETURN                              RI....|</span><br><span class="line">   L2</span><br><span class="line">    ALOAD 0                             RI....|</span><br><span class="line">    ILOAD 1                             RI....|R</span><br><span class="line">    INVOKESTATIC XXX.addLen([Ljava/lang/String;I)I                  RI....|RI</span><br><span class="line">    ISTORE 1                                RI....|I</span><br><span class="line">   L8</span><br><span class="line">    GETSTATIC java/lang/System.out : Ljava/io/PrintStream;          RI.IIR|</span><br><span class="line">    ILOAD 1                             RI.IIR|R</span><br><span class="line">    INVOKEVIRTUAL java/io/PrintStream.println (I)V                  RI.IIR|RI</span><br><span class="line">   L9</span><br><span class="line">    RETURN                              RI.IIR|</span><br></pre></td></tr></table></figure>
+
+<p>接下来，就需要把L2~L8的指令重构到方法addLen中，由于新方法的参数刚好与指令所用到的本地变量一一对应，所以不需要修复，而其又需要返回一个整形值，且该值在本地变量1号位置，所以需要在最后加入两条指令：ILOAD 1和IRETURN。具体如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">public static addLen([Ljava/lang/String;I)I</span><br><span class="line">    ALOAD 0                             RI....|</span><br><span class="line">    DUP                                 RI....|R</span><br><span class="line">    ASTORE 5                                RI....|RR</span><br><span class="line">    ARRAYLENGTH                                 RI...R|R</span><br><span class="line">    ISTORE 4                                RI...R|I</span><br><span class="line">    ICONST_0                                RI..IR|</span><br><span class="line">    ISTORE 3                                RI..IR|I</span><br><span class="line">    GOTO L4                             RI.IIR|</span><br><span class="line">   L5</span><br><span class="line">    ALOAD 5                             RI.IIR|</span><br><span class="line">    ILOAD 3                             RI.IIR|R</span><br><span class="line">    AALOAD                              RI.IIR|RI</span><br><span class="line">    ASTORE 2                                RI.IIR|R</span><br><span class="line">   L6</span><br><span class="line">    ILOAD 1                             RIRIIR|</span><br><span class="line">    ALOAD 2                             RIRIIR|I</span><br><span class="line">    INVOKEVIRTUAL java/lang/String.length ()I                   RIRIIR|IR</span><br><span class="line">    IADD                                RIRIIR|II</span><br><span class="line">    ISTORE 1                                RIRIIR|I</span><br><span class="line">   L7</span><br><span class="line">    IINC 3 1                                RIRIIR|</span><br><span class="line">   L4</span><br><span class="line">    ILOAD 3                             RI.IIR|</span><br><span class="line">    ILOAD 4                             RI.IIR|I</span><br><span class="line">    IF_ICMPLT L5                            RI.IIR|II</span><br><span class="line">    ILOAD 1                             RI.IIR|</span><br><span class="line">    IRETURN                             RI.IIR|I</span><br></pre></td></tr></table></figure>
+
+<p>现在，大家与重构后的Java代码对应的字节码对比下，是不是基本所有指令都一样呢？</p>
+<h1 id="权限问题"><a href="#权限问题" class="headerlink" title="权限问题"></a>权限问题</h1><p>重构后的方法放在同一类中，那肯定是没问题的。但是这样的话，对分析影响不会很大。如果能把重构后的方法放在其它类中，也就是说其它类会多出一些无意义的代码，这样想清晰地分析出某类的用途，就比较难了。</p>
+<p>那么什么样的方法可以放到其它类中，什么样的方法不能呢？大家细心想下，我们Java编程中，如果要把一个方法改到另一个方法中，可能会出现什么限制呢？其实很简单，就是权限问题。</p>
+<p>如果是我们编写的类，则我们可以把相关的访问权限都改为public，就一定不会有问题了。但如果是系统自带的类，我们无法更改，因而如果使用到的类或方法或属性有任意一个不是public的，我们也只是把重构后的方法放在同一类中。</p>
+<h1 id="构造方法问题"><a href="#构造方法问题" class="headerlink" title="构造方法问题"></a>构造方法问题</h1><p>熟悉Java的童鞋应该知道，在构造方法中，如果没指定调用哪个父类的构造方法，则会自动调用父类的默认构造方法。而如果有指定，则调用指定的父类构造方法，且调用此方法前，不能有其它的方法调用代码、赋值代码等。也就是说，调用父类构造方法及其前面的代码，都是不能被重构的。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/03/10/android-asm-04-3",
+        distractionFreeMode: true,
+        title: "4.3、重构方法",
+        body: "http://noverguo.github.io/2015/03/10/android-asm-04-3/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-2.1、bytecode与dalvik opcodes介绍及对比 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="Java方法签名学习bytecode、dalvik bytecode甚至JNI时，都会用到方法的签名，因此这里先给大家介绍下。使用javap(将在2.2章中介绍)工具可生成方法的签名，如：方法定义：1public native int add(long a, String b);对应的签名：1(JLjava/lang/String;)I我们可以看到，在签名中，返回值在最后，参数使用括号括住。下面我来详细解释一下它们的关系：基本数据类型都有一一对应的签名：数据...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Java方法签名"><span class="toc-number">1.</span> <span class="toc-text">Java方法签名</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#bytecode介绍"><span class="toc-number">2.</span> <span class="toc-text">bytecode介绍</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#dalvik-bytecode介绍"><span class="toc-number">3.</span> <span class="toc-text">dalvik bytecode介绍</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#bytecode与dalvik-bytecode对比"><span class="toc-number">4.</span> <span class="toc-text">bytecode与dalvik bytecode对比</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-2.1、bytecode与dalvik opcodes介绍及对比
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/01/08/android-asm-02-1/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-01-08T00:00:00.000Z" itemprop="datePublished">2015-01-08</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="Java方法签名"><a href="#Java方法签名" class="headerlink" title="Java方法签名"></a>Java方法签名</h1><p>学习bytecode、dalvik bytecode甚至JNI时，都会用到方法的签名，因此这里先给大家介绍下。</p>
+<p>使用javap(将在2.2章中介绍)工具可生成方法的签名，如：</p>
+<p>方法定义：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">native</span> <span class="keyword">int</span> <span class="title">add</span><span class="params">(<span class="keyword">long</span> a, String b)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>对应的签名：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(JLjava/lang/String;)I</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看到，在签名中，返回值在最后，参数使用括号括住。</p>
+<a id="more"></a>
+
+<p>下面我来详细解释一下它们的关系：</p>
+<p>基本数据类型都有一一对应的签名：</p>
+<table>
+<thead>
+<tr>
+<th>数据类型</th>
+<th>签名</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>void</td>
+<td>V</td>
+</tr>
+<tr>
+<td>boolean</td>
+<td>Z</td>
+</tr>
+<tr>
+<td>byte</td>
+<td>B</td>
+</tr>
+<tr>
+<td>char</td>
+<td>C</td>
+</tr>
+<tr>
+<td>short</td>
+<td>S</td>
+</tr>
+<tr>
+<td>int</td>
+<td>I</td>
+</tr>
+<tr>
+<td>float</td>
+<td>F</td>
+</tr>
+<tr>
+<td>long</td>
+<td>J</td>
+</tr>
+<tr>
+<td>double</td>
+<td>D</td>
+</tr>
+</tbody></table>
+<p>对象与数组比较特殊。</p>
+<p>对象均以L开头，以;结束，中间为包名+类名，以/分隔，如类java.lang.String的签名为Ljava/lang/String;</p>
+<p>数组使用[来表示，一个[代表一维。如String[]的签名为[Ljava/lang/String;，String[][]的签名为[[Ljava/lang/String;，如果是int[][][]三维数组，则其签名为[[[I</p>
+<h1 id="bytecode介绍"><a href="#bytecode介绍" class="headerlink" title="bytecode介绍"></a>bytecode介绍</h1><p>关于bytecode的介绍，可参考<a href="http://en.wikipedia.org/wiki/Java_bytecode" target="_blank" rel="noopener">http://en.wikipedia.org/wiki/Java_bytecode</a></p>
+<p>学习bytecode与学习汇编有些相似，没学过汇编的童鞋或许会觉得汇编很难，其实汇编语法不难，只是使用汇编写复杂程序难。而bytecode相对来说比汇编还要简单些，这里大概介绍bytecode的语法。</p>
+<p>bytecode是JVM规范中所定义的指令集，由JVM识别并运行。</p>
+<p>bytecode是基于栈的，指令所用到的数据均取自于栈，而指令的操作结果，则会压入栈顶。对于栈不理解的，请先看下数据结构中栈的定义。另外，参数与临时变量都是存放在本地变量中，可以把本地变量和栈都理解为一个固定的int型数组。</p>
+<p>这里先举个简单的例子：</p>
+<p>下面是一个简单的方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">add</span><span class="params">(<span class="keyword">int</span> a, <span class="keyword">int</span> b)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> c = a + b;</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个方法中，需要把两个参数中的数据进行加法运算，加法运算的指令为iadd，上面说了指令所用到的数据均来自于栈，因此就需要先把参数a和参数b加载到栈中。</p>
+<p>我们看下相应的字节码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">add</span><span class="params">(<span class="keyword">int</span> a, <span class="keyword">int</span> b)</span> </span>&#123;</span><br><span class="line">    iload <span class="number">1</span> <span class="comment">// 加载参数a到栈顶</span></span><br><span class="line">    iload <span class="number">2</span> <span class="comment">// 加载参数b到栈顶</span></span><br><span class="line">    iadd        <span class="comment">// 从栈顶取出两个整数进行相加，并把相加后的结果放入栈中</span></span><br><span class="line">    istore <span class="number">3</span>    <span class="comment">// 从栈顶取出一个整数存放到c中</span></span><br><span class="line">    iload <span class="number">3</span> <span class="comment">// 加载临时变量c到栈顶</span></span><br><span class="line">    ireturn <span class="comment">// 从栈顶取出一个整数，并作为返回值返回</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>为了书写方便，以后均用locals代表本地变量，locals[i]代表第i个本地变量。</p>
+<p>iload是用来从locals中加载内容的，但为什么是1呢？或许有人会说locals的计数是从1开始的。但其实不是，这里的计数与java语法中数组的计数一样，都是从0开始的。</p>
+<p>大家有没注意到，这个方法是个成员方法，我们知道成员方法是有this指针的，所以locals[0]就是this指针。当然如果是静态方法，就没this指针了，那么locals[0]就是第1个参数了。</p>
+<p>也就是说，参数是按顺序放在locals的最前面的，而临时变量就是放在locals的参数后面。这个特性非常重要，大家要记住，后面会提到。</p>
+<p>bytecode指令可以分为几类，这里是我综合对ASM（后缀文章会介绍到）与维基百科的理解进行分类，相比维基百科所述的分类复杂一点，但更详细更好理解：</p>
+<p>1）常量赋值</p>
+<p>对象常量(aconst_null)、基本数据类型常量(iconst_<em>、lconst_</em>、fconst_<em>、dconst_</em>、bipush、sipush)、另外ldc指令适用于所有常量。</p>
+<p>需要注意的是，dconst_*泛指了dconst_0与dconst_1，其它类似，后面也有类似的写法。</p>
+<p>2）数组操作</p>
+<p>创建(newarray/anewarray)、读取(xaload)、写入(xastore)、取长度(arraylength)。</p>
+<p>3）栈操作</p>
+<p>压入栈(pop/pop2)、从栈中拷贝(dup*)、交换栈中的值(swap)</p>
+<p>4）算术运算</p>
+<p>加(<em>add)、减(</em>sub)、乘(<em>mul)、除(</em>div)、取模(<em>rem)、取反(</em>neg)、左移(<em>shl)、算术右移(</em>shr)、逻辑右移(<em>ushr)、与(</em>and)、或(<em>or)、异或(</em>xor)</p>
+<p>5）复杂类型相关</p>
+<p>强制类型转换(<em>2</em>、checkcast)、创建(new)、是否某个类的实例(instanceof)</p>
+<p>6）比较或控制跳转</p>
+<p>比较指令(<em>cmp</em>)，控制跳转指令(if*、goto、jsr)</p>
+<p>7）返回(*return/ret)</p>
+<p>8）异常(athrow)</p>
+<p>9）本地变量操作</p>
+<p>读取(<em>load)、写入(</em>store)</p>
+<p>10）成员变量操作</p>
+<p>读取(getfield/getstatic)、写入(putfield/putstatic)</p>
+<p>11）方法调用(invoke*)</p>
+<p>12）switch语句(*switch)</p>
+<p>指令的详细说明请参考：</p>
+<p><a href="http://en.wikipedia.org/wiki/Java_bytecode_instruction_listings" target="_blank" rel="noopener">http://en.wikipedia.org/wiki/Java_bytecode_instruction_listings</a></p>
+<p>由于指令非常多，不便于一一细说，大家可通过eclipse的bytecode插件来对照着看，此插件会在下一章中介绍。</p>
+<p>另外有一点需要注意的是，long和double都是占8个字节的，而上面说过本地变量和栈都可当作int型数组，因为Java中int型占4个字节，所以long和double都占两个位置，而其它类型（boolean、byte、char、short、int、float、引用）都占4个字节。</p>
+<p>举个例子，如果有如下方法定义void a(long a, char b)，假设我们想加载参数b在栈中，需要怎么写呢？我们看到这是一个成员方法，成员方法含this指针，因此locals[0]为this指针。而参数a为long型，占两个字节，因为locals[1~2]为参数a，那么参数b就是locals[3]了。相应的指令为iload 3。</p>
+<p>细心的童鞋会发现，bytecode的大部分操作都没有boolean、byte、char、short相应的指令，只有与int相关的指令，因为它们都直接作为int来处理了。</p>
+<h1 id="dalvik-bytecode介绍"><a href="#dalvik-bytecode介绍" class="headerlink" title="dalvik bytecode介绍"></a>dalvik bytecode介绍</h1><p>官方文档：<a href="https://source.android.com/devices/tech/dalvik/dalvik-bytecode.html" target="_blank" rel="noopener">https://source.android.com/devices/tech/dalvik/dalvik-bytecode.html</a></p>
+<p>dalvik bytecode与bytecode相似，都是一套指令集，由相应的虚拟机来识别运行。但不同的是，davlik bytecode是dalvik VM的指令集，且它是基于寄存器的，也就是本地变量是保存在寄存器中，且指令的数据来源于寄存器。</p>
+<p>与上面相同的例子，我们看下dalvik bytecode是怎样的</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">add</span><span class="params">(<span class="keyword">int</span> a, <span class="keyword">int</span> b)</span> </span>&#123;</span><br><span class="line">    add-<span class="keyword">int</span> v0, v2, v3  <span class="comment">// 把v2(参数a)和v3(参数b)相加存入到v0(临时变量c)中.</span></span><br><span class="line">    <span class="keyword">return</span> v0           <span class="comment">// 把v0作为返回值返回</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>根据注释可以知道，v2和v3分别是分别是参数a和参数b，而v0则是临时变量c。而这个方法又是成员方法，所以v1就是this指针了。</p>
+<p>这里反映了dalvik bytecode的一个特点：临时变量在最前面的寄存器，参数在临时变量之后，寄存器计数从0开始。</p>
+<p>有学过smali（后面会介绍）语法的童鞋或许会有疑问，参数不是应该从p0开始，而临时变量则是从v0开始么？实际上smali的写法只是为了方便大家而已，它生成dex时会针对性地做转换处理。</p>
+<p>指令的分类和bytecode大同小异，这里不作区分，建议大家先把bytecode学好，这样学dalvik bytecode自然会事半功倍。</p>
+<p>细心的童鞋会发现，很多指令对寄存器的范围以及常量有限制，例如const/4 vA, #+B中的A或B这类字母都代表4bit，而vA代表目的寄存器，#+B代表常量，因此目的寄存器需要在v0<del>v15之间，而常量要在0</del>0xF之间。</p>
+<h1 id="bytecode与dalvik-bytecode对比"><a href="#bytecode与dalvik-bytecode对比" class="headerlink" title="bytecode与dalvik bytecode对比"></a>bytecode与dalvik bytecode对比</h1><p>bytecode是基于栈的，其参数与临时变量均存放在locals中，而指令所需要的数据，都存放在stack中。</p>
+<p>dalvik bytecode是基于寄存器的，其参数、临时变量及指令所需要的数据，均存放在寄存器中。</p>
+<p>bytecode有专门的指令(aconst_null)来代表空对象指针。</p>
+<p>dalvik bytecode空对象没作区分，直接使用常量0来表示，也就意味着当一个寄存器被赋值为0，我们需要根据下文才能识别它是对象还是基本数据类型。</p>
+<p>bytecode指令的执行结果会被JVM自动压入栈顶中，无须我们关心。</p>
+<p>dalvik bytecode有部分指令的执行结果需要使用move-result*这一系列的指令来指定存放在某个寄存器中。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>本文并没深入介绍bytecode与dalvik bytecode，但介绍的知识点都是一些关键的点，对于入门来说已经足够了，建议有兴趣学习bytecode与dalvik bytecode的童鞋能够对照着代码来学，多看看。</p>
+<p>关于如何对照着代码来<br>阅读bytecode，可参见2.2章ASM bytecode online插件部分，而dalvik bytecode的阅读，请参见2.3章asmdex，smali/baksmali。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/01/08/android-asm-02-1",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-2.1、bytecode与dalvik opcodes介绍及对比",
+        body: "http://noverguo.github.io/2015/01/08/android-asm-02-1/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

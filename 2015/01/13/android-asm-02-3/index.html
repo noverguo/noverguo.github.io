@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-2.3、ASM库的介绍 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="简介ASM官方地址：http://asm.ow2.org/这里使用的是asm-debug-all-5.0.2.jar，其它版本基本类似。ASM是一个用于操作或分析bytecode的框架，ASM可以新增，读取甚至修改class文件。通过ASM，我们可以根据需要修改class文件，如增加日志、删除无用代码、分析程序行为等等。ASM中的常用类ClassReader：类读取工具。ClassVisitor：类访问者接口，ASM的设计主要基于访问者模式以及基于对象树，此接口中包含与操作该类相...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#简介"><span class="toc-number">1.</span> <span class="toc-text">简介</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#ASM中的常用类"><span class="toc-number">2.</span> <span class="toc-text">ASM中的常用类</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#实例"><span class="toc-number">3.</span> <span class="toc-text">实例</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#排错技巧"><span class="toc-number">4.</span> <span class="toc-text">排错技巧</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-2.3、ASM库的介绍
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/01/13/android-asm-02-3/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-01-13T00:00:00.000Z" itemprop="datePublished">2015-01-13</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h1><p>ASM官方地址：<a href="http://asm.ow2.org/" target="_blank" rel="noopener">http://asm.ow2.org/</a></p>
+<p>这里使用的是asm-debug-all-5.0.2.jar，其它版本基本类似。</p>
+<p>ASM是一个用于操作或分析bytecode的框架，ASM可以新增，读取甚至修改class文件。通过ASM，我们可以根据需要修改class文件，如增加日志、删除无用代码、分析程序行为等等。</p>
+<h1 id="ASM中的常用类"><a href="#ASM中的常用类" class="headerlink" title="ASM中的常用类"></a>ASM中的常用类</h1><ul>
+<li>ClassReader：类读取工具。</li>
+<li>ClassVisitor：类访问者接口，ASM的设计主要基于访问者模式以及基于对象树，此接口中包含与操作该类相关的接口。</li>
+<li>MethodVisitor：方法访问者接口，此接口中包含与操作方法相关的接口。</li>
+<li>FieldVisitor：属性访问者接口，此接口相对比较少用。</li>
+<li>ClassWriter：类写入工具，继承自ClassVisitor。</li>
+<li>MethodWriter：方法写入工具，继承自MethodVisitor，此类非公开类，由ClassWriter来使用。</li>
+<li>ClassNode：代表一个类结点的结构，继承自ClassVisitor。</li>
+<li>MethodNode：代表一个方法结点的结构，继承自MethodVisitor。</li>
+<li>FieldNode：代表一个属性结点的结构，继承自FieldVisitor。</li>
+<li>AbstractInsnNode：代表一条指令的抽象。</li>
+</ul>
+<a id="more"></a>
+
+<p>其它类请大家自行摸索，如Type类。</p>
+<h1 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h1><p>先举个最简单的例子，下面功能实现了从A.class文件中读取类并写回到A.class中：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Main</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">        <span class="comment">// 指定从A.class中读入</span></span><br><span class="line">        ClassReader cr = <span class="keyword">new</span> ClassReader(<span class="keyword">new</span> FileInputStream(<span class="string">"A.class"</span>));</span><br><span class="line">        <span class="comment">// 用于接收需要写入的内容，ClassWriter继承自ClassVisitor</span></span><br><span class="line">        ClassWriter cw = <span class="keyword">new</span> ClassWriter(<span class="number">0</span>);</span><br><span class="line">        <span class="comment">// ClassReader.accept方法接收一个ClassVisitor的对象</span></span><br><span class="line">        <span class="comment">// 该方法会把读入的内容依次写入到相应的ClassVisitor对象中</span></span><br><span class="line">        cr.accept(cw, <span class="number">0</span>);</span><br><span class="line">        <span class="comment">// 把ClassWriter接收到的内容转换成字节数组</span></span><br><span class="line">        <span class="keyword">byte</span>[] byteArray = cw.toByteArray();</span><br><span class="line">        <span class="comment">// 把相应的内容写回到A.class中</span></span><br><span class="line">        FileOutputStream fos = <span class="keyword">new</span> FileOutputStream(<span class="string">"A.class"</span>);</span><br><span class="line">        fos.write(byteArray);</span><br><span class="line">        fos.close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面代码中有个非常关键的方法：accept。这个方法接收一个ClassVisitor，并把自身的内容依次写到ClassVisitor中。除了ClassReader有这个accept外，ClassNode和MethodNode也有此方法。大家可以这样理解，这三个类中都是有数据的，ClassReader的数据来源于文件，而ClassNode和MethodNode的数据来源于内存，而accept方法是用于向ClassVisitor写入数据的。</p>
+<p>前面说过ClassWriter与ClassNode都继承自ClassVisitor，ClassWriter接收到的内容会保存到一个字节数组里，而ClassNode接收到的内容则保存到ClassNode自身的数据结构中。</p>
+<p>ClassNode可以理解为一个普通的Model类，其里面包含了类的版本、访问权限、类名、类签名、父类、父接口、注解、拥有的方法（MethodNode）、拥有的属性（FieldNode）等等。</p>
+<p>类似的还有MethodNode与FieldNode。</p>
+<p>下面的例子是把A类及其方法名+方法签名都打印出来，然后把类以及所有方法的访问权限都改为public的，并重新写回到A.class中。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">// 这里实现的Opcodes，主要是为了方便使用ASM中的一些常量，如ACC_PUBLIC</span><br><span class="line">public class Main implements Opcodes &#123;</span><br><span class="line">    public static void main(String[] args) throws IOException &#123;</span><br><span class="line">        ClassReader cr = new ClassReader(new FileInputStream(&quot;A.class&quot;));</span><br><span class="line">        ClassNode cn = new ClassNode();</span><br><span class="line">        // 把A.class的内容写入到ClassNode结构中</span><br><span class="line">        cr.accept(cn, 0);</span><br><span class="line">        // 打印类名</span><br><span class="line">        System.out.println(cn.name);</span><br><span class="line">        // 更改类的权限为public</span><br><span class="line">        cn.access = changeAccessToPublic(cn.access);</span><br><span class="line">        if(cn.methods != null) &#123;</span><br><span class="line">            for(MethodNode mn : cn.methods) &#123;</span><br><span class="line">                // 打印方法名和方法签名</span><br><span class="line">                System.out.println(&quot;\t&quot; + mn.name + mn.desc);</span><br><span class="line">                // 更改类的权限为public</span><br><span class="line">                mn.access = changeAccessToPublic(mn.access);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        ClassWriter cw = new ClassWriter(0);</span><br><span class="line">        cn.accept(cw);</span><br><span class="line">        byte[] byteArray = cw.toByteArray();</span><br><span class="line">        FileOutputStream fos = new FileOutputStream(&quot;A.class&quot;);</span><br><span class="line">        fos.write(byteArray);</span><br><span class="line">        fos.close();</span><br><span class="line">    &#125;</span><br><span class="line">    public static int changeAccessToPublic(int access) &#123;</span><br><span class="line">        // public protected private只能取其一</span><br><span class="line">        return (access &amp; (~ACC_PRIVATE) &amp; (~ACC_PROTECTED)) | ACC_PUBLIC;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们看到，ClassNode结构已经包含了整个类中所有内容，因此我们只要修改此结构的内容，就可以很方便地修改此类。</p>
+<p>这个例子用到的方式可以称作基于对象树的模式，上面提到ASM的设计还包括基于访问者模式，那么我们看下如何使用访问者模式来实现。为了不与上面重复，这里实现的功能是修改类名及方法名为一些无意义的名称。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">ClassReader cr = new ClassReader(new FileInputStream(&quot;A.class&quot;));</span><br><span class="line">ClassNode cn = new ClassNode();</span><br><span class="line">cr.accept(cn, 0);</span><br><span class="line">ClassWriter cw = new ClassWriter(0);</span><br><span class="line">// ClassVisitor接收一个ClassVisitor的参数，并存放在其成员变量mv中</span><br><span class="line">cn.accept(new ClassVisitor(ASM5, cw) &#123;</span><br><span class="line">    String name = &quot;a&quot;;</span><br><span class="line">    // 生成一个不重复的名字</span><br><span class="line">    private String getUniqueName() &#123;</span><br><span class="line">        int l = name.length() - 1;</span><br><span class="line">        if(name.charAt(l) == &apos;z&apos;) &#123;</span><br><span class="line">            name += &quot;a&quot;;</span><br><span class="line">        &#125; else &#123;</span><br><span class="line">            name = name.substring(0, l) + (char)(name.charAt(l)+1);</span><br><span class="line">        &#125;</span><br><span class="line">        return name;</span><br><span class="line">    &#125;</span><br><span class="line">    @Override</span><br><span class="line">    public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) &#123;</span><br><span class="line">        // super的实现很简单，就是直接调用mv.visit方法，而这里的mv即为cw</span><br><span class="line">        // 这里调用了getUniqueName()来新到一个新的名字</span><br><span class="line">        // 最终的效果是，ClassWriter所拿到的类名为我们生成的名字</span><br><span class="line">        super.visit(version, access, getUniqueName(), signature, superName, interfaces);</span><br><span class="line">    &#125;</span><br><span class="line">    @Override</span><br><span class="line">    public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) &#123;</span><br><span class="line">        // 这里与上面类似，不解释</span><br><span class="line">        return super.visitMethod(access, getUniqueName(), desc, signature, exceptions);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br><span class="line">byte[] byteArray = cw.toByteArray();</span><br><span class="line">FileOutputStream fos = new FileOutputStream(&quot;A.class&quot;);</span><br><span class="line">fos.write(byteArray);</span><br><span class="line">fos.close();</span><br></pre></td></tr></table></figure>
+
+<p>我想更多人关心的是应该如何修改代码吧，上面说过AbstractInsnNode对应于指令的抽象。通过查看AbstractInsnNode的子类，可以发现很多个以Node结尾的类，每一个AbstractInsnNode的子类都与MethodVisitor中以visit开头的方法相对应。例如InsnNode与MethodVisitor.visitInsn方法相对应。</p>
+<p>ASM的分类方式与我之前介绍的分类方式有些不一样，因为ASM是个开源库，是给程序员使用的，因此它的划分方式，当然要为了让我们更容易更方便地编写代码。这里我只介绍一部分一会需要用到的类，其它的大家自行研究。</p>
+<p>InsnNode：简单指令结点，代表所有不需要额外参数的指令。这点从它只接收一个opcode的参数就可以看出来。</p>
+<p>LdcInsnNode：任意常量加载指令结点，其只接收一个Object类型的对象。这条指令的作用是加载各种常量，至于是什么常量，是根据该参数的实际类型决定。这些类型必须为以下类型之一：Integer、Float、Long、Double、String、Type、Handler。Handler类型为ASM自带类型，目前我还没发现有什么代码可以产生出来，大家知道的跟我说下。Type同样为ASM自带类型，用于加载Class对象，如加载Object.class可使用如下代码new LdcInsnNode(Type.getType(Object.class))。</p>
+<p>MethodInsnNode：方法调用指令结点，这个没什么好说的，大家看下就懂，注意不要与MethodNode混淆了。</p>
+<p>接下来我们实现一下通过对象树的方式来在每个方法返回时增加一条日志打印当前方法的日志。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">ClassReader cr = new ClassReader(new FileInputStream(&quot;A.class&quot;));</span><br><span class="line">final ClassNode cn = new ClassNode();</span><br><span class="line">cr.accept(cn, 0);</span><br><span class="line">if(cn.methods != null) &#123;</span><br><span class="line">    for(MethodNode mn : cn.methods) &#123;</span><br><span class="line">        InsnList insns = mn.instructions;</span><br><span class="line">        // 过滤掉抽象方法、本地方法</span><br><span class="line">        if(insns == null || insns.size() == 0) &#123;</span><br><span class="line">            continue;</span><br><span class="line">        &#125;</span><br><span class="line">        InsnList newInsns = new InsnList();</span><br><span class="line">        ListIterator&lt;AbstractInsnNode&gt; iter = insns.iterator();</span><br><span class="line">        while(iter.hasNext()) &#123;</span><br><span class="line">            AbstractInsnNode node = iter.next();</span><br><span class="line">            int opcode = node.getOpcode();</span><br><span class="line">            // 这里其实没必要判断，这样写想说明这些opcode都是属于InsnNode的</span><br><span class="line">            // 这样的写法等价于node instanceof InsnNode</span><br><span class="line">            if(node.getType() == AbstractInsnNode.INSN) &#123;</span><br><span class="line">                if(opcode &gt;= IRETURN &amp;&amp; opcode &lt;= RETURN) &#123;</span><br><span class="line">                    // 增加获取System.out属性的指令</span><br><span class="line">                    newInsns.add(new FieldInsnNode(GETSTATIC, &quot;java/lang/System&quot;, &quot;out&quot;, &quot;Ljava/io/PrintStream;&quot;));</span><br><span class="line">                    // 增加加载字符串常量的指令，这里加载的字符串是类名.方法声明</span><br><span class="line">                    newInsns.add(new LdcInsnNode(cn.name + &quot;.&quot; + mn.name + mn.desc));</span><br><span class="line">                    // 增加调用java/io/PrintStream.println方法的指令</span><br><span class="line">                    newInsns.add(new MethodInsnNode(INVOKEVIRTUAL, &quot;java/io/PrintStream&quot;, &quot;println&quot;, &quot;(Ljava/lang/String;)V&quot;, false));</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            newInsns.add(node);</span><br><span class="line">        &#125;</span><br><span class="line">        mn.instructions = newInsns;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">ClassWriter cw = new ClassWriter(0);</span><br><span class="line">cn.accept(cw);</span><br><span class="line">byte[] byteArray = cw.toByteArray();</span><br><span class="line">FileOutputStream fos = new FileOutputStream(&quot;A.class&quot;);</span><br><span class="line">fos.write(byteArray);</span><br><span class="line">fos.close();</span><br></pre></td></tr></table></figure>
+
+<p>下面实现的功能是通过visitor的方式在每个方法中开头增加一条日志来打印出当前调用的方法。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">ClassReader cr = new ClassReader(new FileInputStream(&quot;A.class&quot;));</span><br><span class="line">final ClassNode cn = new ClassNode();</span><br><span class="line">cr.accept(cn, 0);</span><br><span class="line">ClassWriter cw = new ClassWriter(0);</span><br><span class="line">cn.accept(new ClassVisitor(ASM5, cw) &#123;</span><br><span class="line">    @Override</span><br><span class="line">    public MethodVisitor visitMethod(final int access, final String name, final String desc, String signature, String[] exceptions) &#123;</span><br><span class="line">        return new MethodVisitor(ASM5, super.visitMethod(access, name, desc, signature, exceptions)) &#123;</span><br><span class="line">            @Override</span><br><span class="line">            public void visitCode() &#123;</span><br><span class="line">                super.visitCode();</span><br><span class="line">                // 本地方法和抽象方法都没代码，不能增加。</span><br><span class="line">                // java中有两个特殊的方法&lt;clinit&gt;和&lt;init&gt;</span><br><span class="line">                // &lt;clinit&gt;为静态构造方法，可能会有加载时机问题，需要小心处理，为了简单，这里不处理</span><br><span class="line">                // &lt;init&gt;为构造方法，还记得在Java构造方法中，在调用父类的构造方法前，是不能调用其它方法的</span><br><span class="line">                // 因此构造方法的日志记录需要放在调用父类的构造方法之后，这里不处理，当留给大家的作业吧</span><br><span class="line">                if(checkAccess(ACC_NATIVE) || checkAccess(ACC_ABSTRACT) || name.contains(&quot;&lt;&quot;)) &#123;</span><br><span class="line">                    return;</span><br><span class="line">                &#125;</span><br><span class="line">                // 增加获取System.out属性的指令</span><br><span class="line">                super.visitFieldInsn(GETSTATIC, &quot;java/lang/System&quot;, &quot;out&quot;, &quot;Ljava/io/PrintStream;&quot;);</span><br><span class="line">                // 增加加载字符串常量的指令，这里加载的字符串是类名.方法声明</span><br><span class="line">                super.visitLdcInsn(cn.name + &quot;.&quot; + name + desc);</span><br><span class="line">                // 增加调用java/io/PrintStream.println方法的指令</span><br><span class="line">                super.visitMethodInsn(INVOKEVIRTUAL, &quot;java/io/PrintStream&quot;, &quot;println&quot;, &quot;(Ljava/lang/String;)V&quot;, false);</span><br><span class="line">            &#125;</span><br><span class="line">            private boolean checkAccess(int flag) &#123;</span><br><span class="line">                return (access &amp; flag) == flag;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br><span class="line">byte[] byteArray = cw.toByteArray();</span><br><span class="line">FileOutputStream fos = new FileOutputStream(&quot;A.class&quot;);</span><br><span class="line">fos.write(byteArray);</span><br><span class="line">fos.close();</span><br></pre></td></tr></table></figure>
+
+<p>大家对照一下上面对象树的写法与visitor的写法，理解一下ASM的设计，这样写起代码来会更加的得心应手。</p>
+<h1 id="排错技巧"><a href="#排错技巧" class="headerlink" title="排错技巧"></a>排错技巧</h1><p>ASM的修改涉及到bytecode的内容，写错一点，都会导致各种各样奇怪的问题。因此这里介绍一下排错的技巧，帮助大家更好地定位。</p>
+<p>所有编程语言的开发中，都会分为两种错误。一是编译时错误，二是运行时错误。通过编写ASM代码来生成bytecode的过程，其实就相当于编写bytecode代码，因此也会有类似的编译时错误和运行时错误。</p>
+<p>这里所说bytecode的编译时错误指的是JVM会对bytecode进行校验，校验失败则拒绝运行。而运行时错误时就很好理解了，是指运行过程中，运行的结果不符合我们的预期。</p>
+<p>编译时错误如果还需要等JVM进行校验，那么排错起来也非常麻烦，ASM框架中提供了分析器的功能，能够帮助我们在生成bytecode前找出编译时错误。为了方便，这里我提供了封装好分析器的AsmVerify类，源码见：</p>
+<p><a href="https://github.com/noverguo/jdtools/blob/master/merger/src/com/tencent/jazz/util/AsmVerify.java" target="_blank" rel="noopener">https://github.com/noverguo/jdtools/blob/master/merger/src/com/tencent/jazz/util/AsmVerify.java</a></p>
+<p>声明一下，此代码借鉴于dex2jar中的AsmVerify类，实现原理大家自行摸索。</p>
+<p>下面我来说明一下如何使用此类来找到编译时的错误。</p>
+<p>假设我们有一个Tool类，Tool类中有多个静态方法，其中有一个打印日志的方法。现在我希望能够把Tool类中除日志方法外的所有静态方法都通过日志方法来打印当前所调用的方法。</p>
+<p>我们先看下Tool类是怎样的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">package com.tencent.asm;</span><br><span class="line">import java.util.Date;</span><br><span class="line">public class Tool &#123;</span><br><span class="line">    public static int add(int a, int b) &#123;</span><br><span class="line">        return a+b;</span><br><span class="line">    &#125;</span><br><span class="line">    public static String subString(String value, int start, int end) &#123;</span><br><span class="line">        return value.substring(start, end);</span><br><span class="line">    &#125;</span><br><span class="line">    /**</span><br><span class="line">     * 打印日志，如果为空就不打印</span><br><span class="line">     * @param info</span><br><span class="line">     * @return 是否打印</span><br><span class="line">     */</span><br><span class="line">    public static boolean Log(String info) &#123;</span><br><span class="line">        if(info == null || info.trim().isEmpty()) &#123;</span><br><span class="line">            return false;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(new Date().toString() + &quot;: &quot; + info);</span><br><span class="line">        return true;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>接下来看下我们期待修改后的Tool类应该是这样的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">package com.tencent.asm;</span><br><span class="line">import java.util.Date;</span><br><span class="line">public class Tool &#123;</span><br><span class="line">    public static int add(int a, int b) &#123;</span><br><span class="line">        Log(&quot;add&quot;);</span><br><span class="line">        return a+b;</span><br><span class="line">    &#125;</span><br><span class="line">    public static String subString(String value, int start, int end) &#123;</span><br><span class="line">        Log(&quot;subString&quot;);</span><br><span class="line">        return value.substring(start, end);</span><br><span class="line">    &#125;</span><br><span class="line">    /**</span><br><span class="line">     * 打印日志，如果为空就不打印</span><br><span class="line">     * @param info</span><br><span class="line">     * @return 是否打印</span><br><span class="line">     */</span><br><span class="line">    public static boolean Log(String info) &#123;</span><br><span class="line">        if(info == null || info.trim().isEmpty()) &#123;</span><br><span class="line">            return false;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(new Date().toString() + &quot;: &quot; + info);</span><br><span class="line">        return true;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实现这个功能非常简单，前面已经介绍过类似的例子了，下面给我一个错误的写法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">ClassReader cr = new ClassReader(new FileInputStream(&quot;Tool.class&quot;));</span><br><span class="line">final ClassNode cn = new ClassNode();</span><br><span class="line">cr.accept(cn, 0);</span><br><span class="line">if(cn.methods != null) &#123;</span><br><span class="line">    List&lt;MethodNode&gt; modifyMethodNodes = new ArrayList&lt;MethodNode&gt;();</span><br><span class="line">    Iterator&lt;MethodNode&gt; iter = cn.methods.iterator();</span><br><span class="line">    while(iter.hasNext()) &#123;</span><br><span class="line">        MethodNode mn = iter.next();</span><br><span class="line">        // 日志方法、构造方法不处理</span><br><span class="line">        if(mn.name.equals(&quot;Log&quot;) || mn.name.contains(&quot;&lt;&quot;)) &#123;</span><br><span class="line">            continue;</span><br><span class="line">        &#125;</span><br><span class="line">        modifyMethodNodes.add(mn);</span><br><span class="line">        iter.remove();</span><br><span class="line">    &#125;</span><br><span class="line">    for(final MethodNode mn : modifyMethodNodes) &#123;</span><br><span class="line">        // MethodNode newMethodNode = new MethodNode(mn.access, mn.name, mn.desc, mn.signature, mn.exceptions == null ? null : mn.exceptions.toArray(new String[0]));</span><br><span class="line">        // cn.methods.add(newMethodNode);</span><br><span class="line">        // 这一行代码等价于上面注释的两行代码</span><br><span class="line">        MethodNode newMethodNode = (MethodNode) cn.visitMethod(mn.access, mn.name, mn.desc, mn.signature, mn.exceptions == null ? null : mn.exceptions.toArray(new String[0]));</span><br><span class="line">        mn.accept(new MethodVisitor(ASM5, newMethodNode) &#123;</span><br><span class="line">            @Override</span><br><span class="line">            public void visitInsn(int opcode) &#123;</span><br><span class="line">                if(opcode &gt;= IRETURN &amp;&amp; opcode &lt;= RETURN) &#123;</span><br><span class="line">                    // 把方法名放入栈顶</span><br><span class="line">                    super.visitLdcInsn(mn.name);</span><br><span class="line">                    // 调用日志方法打印日志记录</span><br><span class="line">                    super.visitMethodInsn(INVOKESTATIC, &quot;com/tencent/asm/Tool&quot;, &quot;Log&quot;, &quot;(Ljava/lang/String;)Z&quot;, false);</span><br><span class="line">                &#125;</span><br><span class="line">                super.visitInsn(opcode);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">// COMPUTE_MAXS代表重新计算本地变量及栈的大小</span><br><span class="line">ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);</span><br><span class="line">cn.accept(cw);</span><br><span class="line">byte[] code = cw.toByteArray();</span><br><span class="line">// 使用封装好的AsmVerify来检查编译时错误</span><br><span class="line">AsmVerify.check(code);</span><br><span class="line">FileOutputStream fos = new FileOutputStream(&quot;Tool.class&quot;);</span><br><span class="line">fos.write(code);</span><br><span class="line">fos.close();</span><br></pre></td></tr></table></figure>
+
+<p>大家先看下这种写法有什么问题，然后自己跑写试试，看会出现什么情况。</p>
+<p>大家关注一下AsmVerify.check(code);这一行，这里使用了刚刚给大家提供的AsmVerify类对生成的bytecode进行检验。接下来我们看下这段代码运行后的结果：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line">org.objectweb.asm.tree.analysis.AnalyzerException: Error at instruction 6: Expected an object reference, but found I</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Analyzer.analyze(Analyzer.java:294)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.AsmVerify.check(AsmVerify.java:47)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.AsmVerify.check(AsmVerify.java:34)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.Main.main(Main.java:59)</span><br><span class="line"></span><br><span class="line">Caused by: org.objectweb.asm.tree.analysis.AnalyzerException: Expected an object reference, but found I</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.BasicVerifier.unaryOperation(BasicVerifier.java:171)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.BasicVerifier.unaryOperation(BasicVerifier.java:47)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Frame.execute(Frame.java:582)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Analyzer.analyze(Analyzer.java:199)</span><br><span class="line"></span><br><span class="line">... 3 more</span><br><span class="line"></span><br><span class="line">00000 RII :       |    ALOAD 0</span><br><span class="line"></span><br><span class="line">00001 RII : R     |    ILOAD 1</span><br><span class="line"></span><br><span class="line">00002 RII : RI    |    ILOAD 2</span><br><span class="line"></span><br><span class="line">00003 RII : RII   |    INVOKEVIRTUAL java/lang/String.substring (II)Ljava/lang/String;</span><br><span class="line"></span><br><span class="line">00004 RII : R     |    LDC &quot;subString&quot;</span><br><span class="line"></span><br><span class="line">00005 RII : RR    |    INVOKESTATIC com/tencent/asm/Tool.Log (Ljava/lang/String;)Z</span><br><span class="line"></span><br><span class="line">00006 RII : RI    |    ARETURN</span><br><span class="line"></span><br><span class="line">Exception in thread &quot;main&quot; java.lang.RuntimeException: Error verify method com/tencent/asm/Tool.subString (Ljava/lang/String;II)Ljava/lang/String;</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.AsmVerify.check(AsmVerify.java:53)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.AsmVerify.check(AsmVerify.java:34)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.Main.main(Main.java:59)</span><br><span class="line"></span><br><span class="line">Caused by: org.objectweb.asm.tree.analysis.AnalyzerException: Error at instruction 6: Expected an object reference, but found I</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Analyzer.analyze(Analyzer.java:294)</span><br><span class="line"></span><br><span class="line">at com.tencent.asm.AsmVerify.check(AsmVerify.java:47)</span><br><span class="line"></span><br><span class="line">... 2 more</span><br><span class="line"></span><br><span class="line">Caused by: org.objectweb.asm.tree.analysis.AnalyzerException: Expected an object reference, but found I</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.BasicVerifier.unaryOperation(BasicVerifier.java:171)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.BasicVerifier.unaryOperation(BasicVerifier.java:47)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Frame.execute(Frame.java:582)</span><br><span class="line"></span><br><span class="line">at org.objectweb.asm.tree.analysis.Analyzer.analyze(Analyzer.java:199)</span><br><span class="line">... 3 more</span><br></pre></td></tr></table></figure>
+
+<p>这报错信息中，我们先要关注的是Error at instruction 6: Expected an object reference, but found I这段内容。这段内容的意思是出错的地方在第6条指令，希望得到一个对象的引用，但得到的是整型。</p>
+<p>此外，我们看到它打印了一些指令相关的内容：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">00000 RII :       |    ALOAD 0</span><br><span class="line"></span><br><span class="line">00001 RII : R     |    ILOAD 1</span><br><span class="line"></span><br><span class="line">00002 RII : RI    |    ILOAD 2</span><br><span class="line"></span><br><span class="line">00003 RII : RII   |    INVOKEVIRTUAL java/lang/String.substring (II)Ljava/lang/String;</span><br><span class="line"></span><br><span class="line">00004 RII : R     |    LDC &quot;subString&quot;</span><br><span class="line"></span><br><span class="line">00005 RII : RR    |    INVOKESTATIC com/tencent/asm/Tool.Log (Ljava/lang/String;)Z</span><br><span class="line"></span><br><span class="line">00006 RII : RI    |    ARETURN</span><br></pre></td></tr></table></figure>
+
+<p>刚刚的报错信息说了，出错地方在第6条指令，我们看下这里第6条指令是ARETURN，而RII : IIRI这东西又是什么？这里解释一下，前面的RII代表的是前一条指令执行后locals的内容，后面的IIRI代表的是前一条指令执行后stack的内容。R代表对象或数组（Java中数组其实也是个对象），I代表int。</p>
+<p>再往前看看，LDC “substring”以及 INVOKESTATIC com/tencent/asm/Tool.Log…这两条指令不正是我们加的吗？大家仔细看代码，发现为什么会出错了吗？原来是因为Log方法有返回值，执行完Log方法后，返回值就自动压到栈顶了，而ARETURN则使用了这个int值进行返回，但ARETURN需要的是对象类型。</p>
+<p>那么怎么修正呢？最简单的方式，当然是加一条POP指令，把Log方法的返回值从栈中弹出，如加入如下代码：<br><code>super.visitInsn(POP);</code></p>
+<p>上面的代码中调用日志方法是放在返回指令之前的，如果有多处返回，那么就会增加多条指令，当然这种做法并没什么错误，毕竟我们的要求是打印当前调用的方法，没说什么时候打印（其实返回的方式不止*RETURN这类指令，这里只是为了简单起见）。</p>
+<p>但是最好的方式，当然是放在代码的最前面，这种方式之前的例子已经有了，大家自己试一试吧。</p>
+<p>运行时错误的定位与平时编程一样，只能依靠自身的经验，根据报错信息或者不符合预期的行为来在反编译后的代码中进行查找定位。Jar包的反编译可使用JD-GUI、javap这类工具。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/01/13/android-asm-02-3",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-2.3、ASM库的介绍",
+        body: "http://noverguo.github.io/2015/01/13/android-asm-02-3/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

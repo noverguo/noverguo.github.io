@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-1、概述 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="序言正所谓授人以鱼，不如授人以渔。前段时间一直研究在android代码混淆的相关内容，同时写了两个工具：方法合并工具、混淆工具。这方面的内容网上资料非常少，但入门门槛其实并不高，因此希望通过这系列的文章，让更多人能够了解到这方面的技术。谁能从中获益？对于android开发者来说，能更好的保护自己的软件。对于学生或技术爱好者来说，能学到一门虽冷门但却有意思的技术，开拓视野。对于安全从业者来说，能够针对性地做出更好的防护系统。对于骇客来说…技术无国界嘛^_^需要什么基础？1) Ja...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#序言"><span class="toc-number">1.</span> <span class="toc-text">序言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#谁能从中获益？"><span class="toc-number">2.</span> <span class="toc-text">谁能从中获益？</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#需要什么基础？"><span class="toc-number">3.</span> <span class="toc-text">需要什么基础？</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#能学到的基础知识"><span class="toc-number">4.</span> <span class="toc-text">能学到的基础知识</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#能学到的技术方案"><span class="toc-number">5.</span> <span class="toc-text">能学到的技术方案</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#应该怎么学习"><span class="toc-number">6.</span> <span class="toc-text">应该怎么学习</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#一些故事"><span class="toc-number">7.</span> <span class="toc-text">一些故事</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#关于方法数限制"><span class="toc-number">8.</span> <span class="toc-text">关于方法数限制</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#总结"><span class="toc-number">9.</span> <span class="toc-text">总结</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-1、概述
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/01/07/android-asm-01/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-01-07T00:00:00.000Z" itemprop="datePublished">2015-01-07</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="序言"><a href="#序言" class="headerlink" title="序言"></a>序言</h1><p>正所谓授人以鱼，不如授人以渔。前段时间一直研究在android代码混淆的相关内容，同时写了两个工具：方法合并工具、混淆工具。这方面的内容网上资料非常少，但入门门槛其实并不高，因此希望通过这系列的文章，让更多人能够了解到这方面的技术。</p>
+<h1 id="谁能从中获益？"><a href="#谁能从中获益？" class="headerlink" title="谁能从中获益？"></a>谁能从中获益？</h1><p>对于android开发者来说，能更好的保护自己的软件。</p>
+<p>对于学生或技术爱好者来说，能学到一门虽冷门但却有意思的技术，开拓视野。</p>
+<p>对于安全从业者来说，能够针对性地做出更好的防护系统。</p>
+<p>对于骇客来说…技术无国界嘛^_^</p>
+<a id="more"></a>
+<h1 id="需要什么基础？"><a href="#需要什么基础？" class="headerlink" title="需要什么基础？"></a>需要什么基础？</h1><p>1) Java基础是必不可少的。</p>
+<p>2) 最好对Android开发有一定了解。</p>
+<p>3) 了解NDK开发（非必须）。</p>
+<p>4) 了解C语言（非必须）。</p>
+<h1 id="能学到的基础知识"><a href="#能学到的基础知识" class="headerlink" title="能学到的基础知识"></a>能学到的基础知识</h1><p>学任何东西，基础总是最重要的，因此我首先会先介绍代码混淆所需要了解的基础知识点、用到的工具以及相关库。</p>
+<p>基础知识：bytecode、dalvik bytecode及其对比。</p>
+<p>用到的工具：dex2jar、apktool、aapt、zipalign、ndk、javap、bytecode插件等等。</p>
+<p>相关库：asm、asmdex、smali/baksmali</p>
+<h1 id="能学到的技术方案"><a href="#能学到的技术方案" class="headerlink" title="能学到的技术方案"></a>能学到的技术方案</h1><p>1) 相似度识别方案：</p>
+<p>这里所说的相似度，是指两个apk文件的相似度比较。一般情况下，同一款软件的不同版本，相似度是非常高的。</p>
+<p>相似度识别方案包括基于代码流的相似度识别、基于API序列的相似度识别以及基于变量计数的相似度识别。</p>
+<p>2) 代码混淆方案：</p>
+<p>这里的代码混淆泛指对代码进行处理，至于怎么处理就要看各个方案了。</p>
+<p>这里提供了一些代码混淆的思路：</p>
+<p>a) 正常属性调用或正常方法调用改为反射调用。</p>
+<p>b) 对常量字符串进行加密</p>
+<p>c) 对指令进行等价替换、增加花指令</p>
+<p>d) 打乱代码</p>
+<p>e) 把一部分代码抽取成一个方法（重构）</p>
+<p>f) 把多个方法合并成一个方法</p>
+<p>g) 转换为本地代码（JNI）</p>
+<p>h) 隐藏代码并动态加载</p>
+<h1 id="应该怎么学习"><a href="#应该怎么学习" class="headerlink" title="应该怎么学习"></a>应该怎么学习</h1><p>这方面的内容需要自己多想想，多动手实践，这样才能更好地理解。</p>
+<p>另外，这一系列的文章很多基础知识网上都有很详细的介绍，而我又不打算为了凑字数而进行复制粘贴，因此这里有些内容会比较精简，完全是根据经验拿比较重要的点进行说明，所以建议大家多利用搜索引擎，结合网上的资料来看。</p>
+<h1 id="一些故事"><a href="#一些故事" class="headerlink" title="一些故事"></a>一些故事</h1><p>最初Leader提出来让bob（dex2jar的作者）去做一个方法合并的工具，从而突破android 65536方法数量的限制。后来bob带了我们入门（非常感谢bob），然后把方法合并的一些思路教给了我们后就离职了。之后我Leader跟我说了一下做完方法合并工具后的路，并问我能不能做下去，我说应该能，其实那时我才刚开始入门，感觉很没底，但又觉得这个非常有意思，所以想去研究玩玩，之后就一直研究到现在。</p>
+<p>在做完代码合并工具之后，Leader提出我们的目标是每次混淆后反编译出来的东西都不同，加大看代码难度。然后基于这目标，做了个混淆的工具，当然也可以结合proguard或dexguard来进行混淆，加大破解难度。</p>
+<p>做这块的资料非常少，因此找Bug非常难，但其实知识点并不难的，我会在之后的系列文章中介绍这些知识与技巧。</p>
+<h1 id="关于方法数限制"><a href="#关于方法数限制" class="headerlink" title="关于方法数限制"></a>关于方法数限制</h1><p>android2.3或之前版本有两个限制，一是65536个方法数量的限制，二是5M的线性内存(LinearAlloc buffer)的限制。</p>
+<p>做方法合并工具的时候，Android官方的分Dex方案还没出，解决方法数限制的方案主要有几种：</p>
+<p>1) 使用proguard去掉一些没用的方法</p>
+<p>2) 写代码时注意控制方法的量</p>
+<p>3) 人为地分成多个Dex并动态加载（例如做成插件化的方式）</p>
+<p>4) 通过动态patch技术改大LinearAlloc buffer。</p>
+<p>而方法合并工具是为了提供多一种可选择的方案。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>学好本系列的文章，相信大家也会有能力做像proguard、dexguard之类的工具。</p>
+<p>关于上面提到的两个工具，源码会在陆续提交github上，源码地址：</p>
+<p><a href="https://github.com/noverguo/jdtools" target="_blank" rel="noopener">https://github.com/noverguo/jdtools</a></p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/01/07/android-asm-01",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-1、概述",
+        body: "http://noverguo.github.io/2015/01/07/android-asm-01/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

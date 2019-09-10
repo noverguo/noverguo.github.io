@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-2.4、ASMDEX库的介绍 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="简介ASMDEX官方地址：http://asm.ow2.org/在2.3章中我给大家介绍了ASM，细心的童鞋应该能发现，ASM与ASMDEX的官方地址是同一个。ASM是针对class文件，而Java在很久以前就已经有了，所以说ASM已经非常的成熟。而ASMDEX是针对的Dex文件的，Android的出现也没多少年，因此ASMDEX到现在，也只有1.0版，相对来说并不稳定。ASMDEX的设计与ASM类似，因此学过ASM的童鞋，学习ASMDEX应该是没多少难度的。本文假设大家已经学过ASM...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#简介"><span class="toc-number">1.</span> <span class="toc-text">简介</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Java与Android"><span class="toc-number">2.</span> <span class="toc-text">Java与Android</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#ASMDEX中的常用类"><span class="toc-number">3.</span> <span class="toc-text">ASMDEX中的常用类</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#ASMDEX的问题"><span class="toc-number">4.</span> <span class="toc-text">ASMDEX的问题</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-2.4、ASMDEX库的介绍
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/01/27/android-asm-02-4/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-01-27T00:00:00.000Z" itemprop="datePublished">2015-01-27</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h1><p>ASMDEX官方地址：<a href="http://asm.ow2.org/" target="_blank" rel="noopener">http://asm.ow2.org/</a></p>
+<p>在2.3章中我给大家介绍了ASM，细心的童鞋应该能发现，ASM与ASMDEX的官方地址是同一个。ASM是针对class文件，而Java在很久以前就已经有了，所以说ASM已经非常的成熟。而ASMDEX是针对的Dex文件的，Android的出现也没多少年，因此ASMDEX到现在，也只有1.0版，相对来说并不稳定。</p>
+<p>ASMDEX的设计与ASM类似，因此学过ASM的童鞋，学习ASMDEX应该是没多少难度的。本文假设大家已经学过ASM，还没学过的童鞋，请参考2.3章。</p>
+<h1 id="Java与Android"><a href="#Java与Android" class="headerlink" title="Java与Android"></a>Java与Android</h1><p>这里强调一下Java与Android的关系。</p>
+<p>Java是一门编程语言，我们在编写完Java代码后，一般使用javac工具（由JDK提供）把Java代码转换为字节码(bytecode)，存放在相应的.class文件中，由JVM来识别运行。JDK是用来开发及运行Java应用程序的工具集。</p>
+<a id="more"></a>
+<p>Android是一个平台，Android平台上的开发主要支持Java语言和C/C++语言，开发工具集分别对应为SDK与NDK。在使用Java语言开发的过程中，我们仍需要通过javac工具把Java代码编译成的字节码，然后通过dx工具（由SDK提供）把多个.class文件转换为一个.dex文件。</p>
+<p>所以说，在Android应用程序中，我们的程序代码均放在一个Dex文件中（分Dex的情况不考虑）。</p>
+<h1 id="ASMDEX中的常用类"><a href="#ASMDEX中的常用类" class="headerlink" title="ASMDEX中的常用类"></a>ASMDEX中的常用类</h1><ul>
+<li>ApplicationReader：Dex文件读入类，类似于ASM的ClassReader类。</li>
+<li>ApplicationVisitor：应用程序访问者接口。</li>
+<li>ApplicationNode：代表整个应用结点的结构，继承自ApplicationVisitor。</li>
+<li>ApplicationWriter：Dex文件写入类。</li>
+</ul>
+<p>由于dex文件里包含了应用程序中的所有类，而ASMDEX的输入来源于ApplicationReader，所以ASMDEX中没有ClassReader类。</p>
+<p>至于其它像ClassNode、ClassVisitor之类的类，ASMDEX中都包含，而且设计是一样的。</p>
+<p>#实例</p>
+<p>由于已经有了ASM的基础，ASMDEX的很多写法都与ASM中一致，这里我直接给个修改类名、方法名以及属性名的例子。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">public class Main implements Opcodes &#123;</span><br><span class="line">    public static void main(String[] args) throws IOException &#123;</span><br><span class="line">        // 这里的输入来源于dex文件，dex文件在apk文件中，apk是个zip包，怎么解压大家看着办</span><br><span class="line">        ApplicationReader ar = new ApplicationReader(ASM4, new FileInputStream(&quot;classes.dex&quot;));</span><br><span class="line">        ApplicationWriter aw = new ApplicationWriter();</span><br><span class="line">        ar.accept(new ApplicationVisitor(ASM4, aw) &#123;</span><br><span class="line">            @Override</span><br><span class="line">            public ClassVisitor visitClass(int access, String name, String[] signature, String superName, String[] interfaces) &#123;</span><br><span class="line">                return new ClassVisitor(ASM4, super.visitClass(access, getNewName(name), signature, superName, interfaces)) &#123;</span><br><span class="line">                    @Override</span><br><span class="line">                    public FieldVisitor visitField(int access, String name, String desc, String[] signature, Object value) &#123;</span><br><span class="line">                        return super.visitField(access, getNewName(name), desc, signature, value);</span><br><span class="line">                    &#125;</span><br><span class="line">                    @Override</span><br><span class="line">                    public MethodVisitor visitMethod(int access, String name, String desc, String[] signature, String[] exceptions) &#123;</span><br><span class="line">                        return super.visitMethod(access, getNewName(name), desc, signature, exceptions);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;;</span><br><span class="line">            &#125;</span><br><span class="line">            // 得到一个新的名称</span><br><span class="line">            private String getNewName(String name) &#123;</span><br><span class="line">                return &quot;_&quot; + name.intern().hashCode();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, 0);</span><br><span class="line">        byte[] code = aw.toByteArray();</span><br><span class="line">        FileOutputStream fos = new FileOutputStream(&quot;new_classes.dex&quot;);</span><br><span class="line">        fos.write(code);</span><br><span class="line">        fos.close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>代码没什么好解释的，大家看注释就行。另外关于如何修改dalvik bytecode，其实与ASM都差不多，大家自己试试就行。</p>
+<h1 id="ASMDEX的问题"><a href="#ASMDEX的问题" class="headerlink" title="ASMDEX的问题"></a>ASMDEX的问题</h1><p>在ASM中，我封装了一个AsmVerify类，其内部使用了ASM框架CheckClassAdapter、Textifier、TraceMethodVisitor、Analyzer等工具类来实现。但ASMDEX并没提供这么多工具类，只提供了打印相关的类如AsmDexifierMethodVisitor。因此要封装出类似AsmVerify的类，还是有一定难度的，有兴趣的童鞋可以自己试着封装一下。</p>
+<p>此外，前面已经提到过了，ASMDEX只发布了1.0版本，所以还是有很多Bug的，就如对JNI支持有问题、增加指令后的对齐问题等等。由于ASMDEX是开源的，所以有兴趣的童鞋可以自己试着去修复。</p>
+<p>前面介绍dalvik bytecode的时候有提过，有些指令对寄存器的范围是有限制的。大家想像一下这样一个场景：</p>
+<p>假如我需要在一个方法中增加一段代码，假设这个方法寄存器v0<del>v14是临时变量，寄存器v15</del>vN是参数。而这段代码中需要一些临时寄存器，但我们要分析现有代码中哪些寄存器是可用的，这个要分析上下文，人工分析还好说，但如果要写程序分析的话，很有难度吧，而万一寄存器都不可用了呢？那么理所当然最好的方式，肯定是增加一些临时寄存器了，对吧？</p>
+<p>设想下，如果我们增加一个临时寄存器，这时寄存器v0<del>v15是临时变量了，v16</del>vN+1是参数，其中v15是新增的，因此它把参数所在的寄存器（v15<del>vN）都挤后了一位。这样的话，那使用到参数的指令，是不是也要改一下？假设某指令只支持使用前16个(即v0</del>v15)寄存器，而现在本来它使用了v15的寄存器，改成v16后，就肯定有问题了。</p>
+<p>不知道大家看懂没，总的意思就是说使用ASMDEX时，如果需要增加临时变量的话，会有很大的编码难度，除非要处理的代码都是已知的简单代码。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/01/27/android-asm-02-4",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-2.4、ASMDEX库的介绍",
+        body: "http://noverguo.github.io/2015/01/27/android-asm-02-4/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

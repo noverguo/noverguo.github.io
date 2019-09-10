@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>3.1、基于代码流的相似度分析 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言这里所说的相似度分析是针对Android应用来说的，主要是指Dex文件的分析。通过相似度分析，可以快速地识别一款应用是否来源于另一款应用，如版本更新、重打包之类的。这对于病毒分析、重打包分析等非常之有用。目前市面上主流的相似度分析方案有3种：基于代码流、基于API序列、基于变量计数。本章将介绍基于代码流的方案。基于代码流的方案是指针对同一个方法中的多条指令进行连续性识别，Androguard中的androsim.py工具就是基于这种原理。当然，有了前面的知识，我们也可以自己写一个...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#androsim-py的使用"><span class="toc-number">2.</span> <span class="toc-text">androsim.py的使用</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#基于代码流的流程设想"><span class="toc-number">3.</span> <span class="toc-text">基于代码流的流程设想</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#基于代码流的模拟实现"><span class="toc-number">4.</span> <span class="toc-text">基于代码流的模拟实现</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#问题与建议"><span class="toc-number">5.</span> <span class="toc-text">问题与建议</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            3.1、基于代码流的相似度分析
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/02/27/android-asm-03-1/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-02-27T00:00:00.000Z" itemprop="datePublished">2015-02-27</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>这里所说的相似度分析是针对Android应用来说的，主要是指Dex文件的分析。</p>
+<p>通过相似度分析，可以快速地识别一款应用是否来源于另一款应用，如版本更新、重打包之类的。这对于病毒分析、重打包分析等非常之有用。</p>
+<p>目前市面上主流的相似度分析方案有3种：基于代码流、基于API序列、基于变量计数。本章将介绍基于代码流的方案。</p>
+<p>基于代码流的方案是指针对同一个方法中的多条指令进行连续性识别，Androguard中的androsim.py工具就是基于这种原理。当然，有了前面的知识，我们也可以自己写一个类似的工具。</p>
+<h1 id="androsim-py的使用"><a href="#androsim-py的使用" class="headerlink" title="androsim.py的使用"></a>androsim.py的使用</h1><p>androsim.py是Androguard中的一个工具，因此需要先安装Androguard。Androguard下载与安装请参见官方文档：<a href="http://code.google.com/p/androguard/" target="_blank" rel="noopener">http://code.google.com/p/androguard/</a></p>
+<a id="more"></a>
+<p>androsim.py使用非常简单，用法如下：</p>
+<p>androsim.py -i &lt;first.apk&gt; &lt;second.apk&gt;</p>
+<p>androsim.py的测试</p>
+<p>下面是某款软件旧版与新版测试的结果：</p>
+<p>Elements:</p>
+<p> IDENTICAL: 1566</p>
+<p> SIMILAR:  414</p>
+<p> NEW: 73</p>
+<p> DELETED: 24</p>
+<p> SKIPPED: 0</p>
+<p>–&gt; methods: 92.527568% of similarities</p>
+<p>下面是两款不同软件的测试结果：</p>
+<p>Elements:</p>
+<p> IDENTICAL: 158</p>
+<p> SIMILAR:  1641</p>
+<p> NEW: 1531</p>
+<p> DELETED: 5938</p>
+<p> SKIPPED: 0</p>
+<p>–&gt; methods: 31.538353% of similarities</p>
+<h1 id="基于代码流的流程设想"><a href="#基于代码流的流程设想" class="headerlink" title="基于代码流的流程设想"></a>基于代码流的流程设想</h1><p>androsim.py的分析流程设想（具体实现比较复杂，有兴趣的可以去研究下）：</p>
+<p>1) 先取第一个apk的一个方法的指令列表</p>
+<p>2) 然后与第二个apk的所有方法的指令列表依次进行指令比较（像KMP这类字符串算法），并分别计算得到相似度。</p>
+<p>3) 如果找到完全一样的，就停止并记录下来</p>
+<p>4) 否则把所有方法都比较一次，然后去掉不相似的，留下相似的结果以便后缀使用。</p>
+<p>5) 转到第1步，直到所有方法比较完毕</p>
+<p>6) 先过滤出完全一样的，然后按得分依次找到最相似的，剩下的当新增或删除处理。</p>
+<p>7) 最后计算出总的相似度。</p>
+<p>其中，第2步中的计算相似度，是通过计算两个指令列表中连续相同指令的个数占全部指令中的比例。</p>
+<h1 id="基于代码流的模拟实现"><a href="#基于代码流的模拟实现" class="headerlink" title="基于代码流的模拟实现"></a>基于代码流的模拟实现</h1><p>这个功能实现使用ASM或ASMDEX都差不多，不过使用ASM需要先用dex2jar转换一下。这边为了方便，直接使用ASMDEX。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br></pre></td><td class="code"><pre><span class="line">public class Main implements Opcodes &#123;</span><br><span class="line">    public static void main(String[] args) throws IOException &#123;</span><br><span class="line">        // 针对的是两个不同dex之前的相似度</span><br><span class="line">        ApplicationNode firstNode = new ApplicationNode(ASM4);</span><br><span class="line">        ApplicationNode secondNode = new ApplicationNode(ASM4);</span><br><span class="line">        ApplicationReader ar = new ApplicationReader(ASM4, new FileInputStream(&quot;classes1.dex&quot;));</span><br><span class="line">        ar.accept(firstNode, 0);</span><br><span class="line">        ar = new ApplicationReader(ASM4, new FileInputStream(&quot;classes2.dex&quot;));</span><br><span class="line">        ar.accept(secondNode, 0);</span><br><span class="line">        // 定义相应的结果变量</span><br><span class="line">        int identicalCount = 0;</span><br><span class="line">        int similarityCount = 0;</span><br><span class="line">        int newCount = 0;</span><br><span class="line">        int delCount = 0;</span><br><span class="line">        int skipFirstCount = 0;</span><br><span class="line">        int skipSecondCount = 0;</span><br><span class="line">        double similarityScore = 0;</span><br><span class="line">        int firstMethodCount = 0;</span><br><span class="line">        int secondMethodCount = 0;</span><br><span class="line">        float allScore = 0;</span><br><span class="line">        for(ClassNode firstClassNode : firstNode.classes) &#123;</span><br><span class="line">            if(firstClassNode.methods != null) &#123;</span><br><span class="line">                for(MethodNode firstMethodNode : firstClassNode.methods) &#123;</span><br><span class="line">                    ++firstMethodCount;</span><br><span class="line">                    // 抽象方法及本地方法当作skip处理</span><br><span class="line">                    if(firstMethodNode.instructions.size() == 0) &#123;</span><br><span class="line">                        ++skipFirstCount;</span><br><span class="line">                        continue;</span><br><span class="line">                    &#125;</span><br><span class="line">                    float maxScore = 0;</span><br><span class="line">                    boolean foundIdentacal = false;</span><br><span class="line">                    for(ClassNode secondClassNode : secondNode.classes) &#123;</span><br><span class="line">                        // 找到完全一样的，就没必要再找了</span><br><span class="line">                        if(foundIdentacal) &#123;</span><br><span class="line">                            break;</span><br><span class="line">                        &#125;</span><br><span class="line">                        if(secondClassNode.methods != null) &#123;</span><br><span class="line">                            for(MethodNode secondMethodNode : secondClassNode.methods) &#123;</span><br><span class="line">                                if(secondMethodNode.instructions.size() == 0) &#123;</span><br><span class="line">                                    continue;</span><br><span class="line">                                &#125;</span><br><span class="line">                                float score = getScore(firstMethodNode.instructions, secondMethodNode.instructions);</span><br><span class="line">                                if(score &gt; 0.999f) &#123;</span><br><span class="line">                                    foundIdentacal = true;</span><br><span class="line">                                    ++identicalCount;</span><br><span class="line">                                    break;</span><br><span class="line">                                &#125; else if(score &gt; maxScore) &#123; </span><br><span class="line">                                    maxScore = score;</span><br><span class="line">                                &#125;</span><br><span class="line">                            &#125;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125;</span><br><span class="line">                    // 这里设置20%以上才算相似，否则认为此方法已经删除。</span><br><span class="line">                    if(!foundIdentacal)&#123;</span><br><span class="line">                        if(maxScore &lt; 0.2) &#123;</span><br><span class="line">                            ++delCount;</span><br><span class="line">                        &#125; else &#123;</span><br><span class="line">                            ++similarityCount;</span><br><span class="line">                            allScore += maxScore;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125;</span><br><span class="line">                        </span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        for(ClassNode secondClassNode : secondNode.classes) &#123;</span><br><span class="line">            if(secondClassNode.methods != null) &#123;</span><br><span class="line">                for(MethodNode secondMethodNode : secondClassNode.methods) &#123;</span><br><span class="line">                    ++secondMethodCount;</span><br><span class="line">                    if(secondMethodNode.instructions.size() == 0) &#123;</span><br><span class="line">                        ++skipSecondCount;</span><br><span class="line">                        continue;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        // 多出来的算新增</span><br><span class="line">        newCount = Math.abs(firstMethodCount - secondMethodCount);</span><br><span class="line">        // 相似度结果： (完全相同数量+相似度总得分+跳过的最少值)/最大的方法数</span><br><span class="line">        similarityScore = (identicalCount + allScore + Math.min(skipFirstCount, skipSecondCount)) / (double)Math.max(firstMethodCount, secondMethodCount) * 100;</span><br><span class="line">        // 输出结果</span><br><span class="line">        System.out.println(&quot;Elements:&quot;);</span><br><span class="line">        System.out.println(&quot;\tIDENTICAL:\t&quot; + identicalCount);</span><br><span class="line">        System.out.println(&quot;\tSIMILAR:\t&quot; + similarityCount);</span><br><span class="line">        System.out.println(&quot;\tNEW:\t\t&quot; + newCount);</span><br><span class="line">        System.out.println(&quot;\tDELETED:\t&quot; + delCount);</span><br><span class="line">        System.out.println(&quot;\tSKIPPED:\t&quot; + Math.min(skipFirstCount, skipSecondCount));</span><br><span class="line">        System.out.println(&quot;\t--&gt; methods: &quot; + similarityScore + &quot;% of similarities&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    private static float getScore(InsnList firstInsnList, InsnList secondInsnList) &#123;</span><br><span class="line">        // 保证firstInsnList的指令数最多</span><br><span class="line">        if(firstInsnList.size() &lt; secondInsnList.size()) &#123;</span><br><span class="line">            InsnList tmpList = firstInsnList;</span><br><span class="line">            firstInsnList = secondInsnList;</span><br><span class="line">            secondInsnList = tmpList;</span><br><span class="line">        &#125;</span><br><span class="line">        int firstSize = firstInsnList.size();</span><br><span class="line">        int secondSize = secondInsnList.size();</span><br><span class="line">        // 为了简单起见，这里直接使用暴力，算法好的童鞋可以试着优化成KMP或更优的方案</span><br><span class="line">        int maxMatchCount = 0;</span><br><span class="line">    end:for(int i=0;i&lt;firstSize;++i) &#123;</span><br><span class="line">            for(int j=0;j&lt;secondSize;++j) &#123;</span><br><span class="line">                int count = 0;</span><br><span class="line">                for(int k=0;i+k&lt;firstSize &amp;&amp; j+k&lt;secondSize;++k) &#123;</span><br><span class="line">                    // 匹配到相同时，继续往后匹配，直到匹配不上</span><br><span class="line">                    // 这里匹配的依据为操作码一致</span><br><span class="line">                    if(firstInsnList.get(i+k).getOpcode() == secondInsnList.get(j+k).getOpcode()) &#123;</span><br><span class="line">                        ++count;</span><br><span class="line">                    &#125; else &#123;</span><br><span class="line">                        break;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">                if(count &gt; maxMatchCount) &#123;</span><br><span class="line">                    maxMatchCount = count;</span><br><span class="line">                &#125;</span><br><span class="line">                // 匹配的最大数量已经超过当前剩余的指令，则没必要找下去了</span><br><span class="line">                if(maxMatchCount &gt; secondSize - j) &#123;</span><br><span class="line">                    break end;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        // 相似度算法: 最大匹配数/平均指令长度</span><br><span class="line">        return maxMatchCount / ((firstSize + secondSize) / 2.0f);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在上面的代码，我直接使用最高相似度的得分，并没有处理方法比较重合的问题，另外也可以做很多改进，如已找到完全相同的方法避免重复处理、计算得分时的算法优化等等，大家有兴趣的话可以试着把它做得更完善。</p>
+<p>下面给大家看下我的一个运行结果：</p>
+<p>Elements:</p>
+<p>IDENTICAL: 695</p>
+<p>SIMILAR: 5711</p>
+<p>NEW: 1</p>
+<p>DELETED: 1649</p>
+<p>SKIPPED: 282</p>
+<p>–&gt; methods: 47.81350373478352% of similarities</p>
+<h1 id="问题与建议"><a href="#问题与建议" class="headerlink" title="问题与建议"></a>问题与建议</h1><p>androsim.py在使用时非常耗内存，特别是方法数较多且相似度不高的情况下，会出现内存不足的情况（我的机器配置是8G内存，基本1.5W个方法就不行了）。</p>
+<p>因此如果需要兼容大型应用的相似度比较的话，建议大家按照上面的大体思路自己做一个相应的实现，并且针对性地做内存方面的优化。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/02/27/android-asm-03-1",
+        distractionFreeMode: true,
+        title: "3.1、基于代码流的相似度分析",
+        body: "http://noverguo.github.io/2015/02/27/android-asm-03-1/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

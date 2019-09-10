@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-2.5、asm、asmdex、smali/baksmali的优劣对比 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="前言前几章中我们分别介绍asm、asmdex以及smali/baksmali这三个开源库，它们各有其特色之处，这一章我们来对比一下它们的优劣，以便更好地选择方案进行开发。ASMasm修改的是class文件，所以无法直接修改android应用，不过幸运的是，我们可以通过dex2jar进行转换。但这样一来，就相当于同时依赖asm和dex2jar了。这样我们开发过程中就需要对asm和dex2jar都保持怀疑的态度，以免由于asm或dex2jar的Bug而影响到开发的效率。幸运的是，asm5....">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#ASM"><span class="toc-number">2.</span> <span class="toc-text">ASM</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#ASMDEX"><span class="toc-number">3.</span> <span class="toc-text">ASMDEX</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#smali-baksmali"><span class="toc-number">4.</span> <span class="toc-text">smali/baksmali</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-2.5、asm、asmdex、smali/baksmali的优劣对比
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/02/11/android-asm-02-5/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-02-11T00:00:00.000Z" itemprop="datePublished">2015-02-11</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>前几章中我们分别介绍asm、asmdex以及smali/baksmali这三个开源库，它们各有其特色之处，这一章我们来对比一下它们的优劣，以便更好地选择方案进行开发。</p>
+<h1 id="ASM"><a href="#ASM" class="headerlink" title="ASM"></a>ASM</h1><p>asm修改的是class文件，所以无法直接修改android应用，不过幸运的是，我们可以通过dex2jar进行转换。但这样一来，就相当于同时依赖asm和dex2jar了。这样我们开发过程中就需要对asm和dex2jar都保持怀疑的态度，以免由于asm或dex2jar的Bug而影响到开发的效率。</p>
+<p>幸运的是，asm5.0版非常地成熟，到目前还没发现Bug，而dex2jar0.95版有一点Bug，但更新到2.0版后，至今也没发现有严重的Bug。不过dex2jar有个小问题，就是不支持保留行号和调试信息。</p>
+<a id="more"></a>
+<p>下面总结一下asm的优劣：</p>
+<ul>
+<li>优势：<br>  开发简单，调试相对比较容易，框架都相对比较成熟。</li>
+<li>劣势：<br>  dex2jar不支持保留行号和调试信息，程序出Bug后无法进行堆栈还原。</li>
+</ul>
+<h1 id="ASMDEX"><a href="#ASMDEX" class="headerlink" title="ASMDEX"></a>ASMDEX</h1><p>asmdex修改的是dex文件，因而可以直接处理android应用，不需要依赖其它工具，这一点使得asmdex使用起来更方便。</p>
+<p>在介绍asmdex中我曾经提到一些asmdex的问题，像增加新的临时变量的问题、asmdex在支持JNI上存在问题等等，具体请参照2.4章。</p>
+<p>下面总结下asmdex的优劣：</p>
+<ul>
+<li>优势：<br>  可直接处理dex文件，支持保留行号等，使用起来非常方便。</li>
+<li>劣势：<br>  如果开发时要新增临时变量的话，开发难度非常高，另外asmdex框架自身的bug很多。</li>
+</ul>
+<h1 id="smali-baksmali"><a href="#smali-baksmali" class="headerlink" title="smali/baksmali"></a>smali/baksmali</h1><p>我们知道，smali库支持dex文件与smali文件互转。smali文件类似于java源文件，它们都是文本文件，里面包含了类、属性、方法的定义及相关代码等等。</p>
+<p>一般破解android应用的作法都是通过baksmali反汇编dex产生对应的smali文件，修改完成后再通过smali汇编成dex。因此我们也可以通过编写自动化工具来模拟这个过程，不过这样一来，就需要写解释器之类的，显然会有些复杂。</p>
+<p>smali/baksmali虽然开源，但其实际是一套工具，因而并不像asm和asmdex那样提供对外的API接口。不过正因为它是开源的，就自然有办法通过改它的代码来实现我们想要的功能，具体请查看2.5章。</p>
+<p>下面总结下smali/baksmali的优劣：</p>
+<ul>
+<li>优势：<br>  android自带工具，比较成熟可靠，使用起来非常简单。</li>
+<li>劣势：<br>  开发成本比较高。</li>
+</ul>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>我们可以看到，三个库都各有优劣，不过对比下劣势，asmdex的劣势比较明显，暂时不适合混淆工具的开发。</p>
+<p>而asm的劣势主要在于dex2jar的问题，这问题在之后版本的dex2jar或许会修复，且混淆本来就是增加破解难度的目的，因而行号和调试信息保留的意义相对不大。当然一般成熟的应用都会有相应的crash上报，也就是说行号也是有一定的必要性的。</p>
+<p>smali库除了开发成本高以外，没什么其它问题，因此对于有强烈需要保留行号的，可使用smali，否则使用asm，当然自己改下dex2jar保留行号，也是可以的。</p>
+<p>有人觉得奇怪，既然asmdex都不适合开发混淆工具，那为啥要介绍它呢？原因有二，其一是多介绍一款工具，提供更多的方案选择，同时更有对比性。其二是asmdex的问题在于修改dex时会有很多困难，但如果有只读取不修改的需求的话，那么asmdex是最好的选择，在第三章中我们将能看到它的身影。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/02/11/android-asm-02-5",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-2.5、asm、asmdex、smali/baksmali的优劣对比",
+        body: "http://noverguo.github.io/2015/02/11/android-asm-02-5/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

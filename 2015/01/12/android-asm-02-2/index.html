@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>android代码混淆系列文章-2.2、相关工具的介绍与使用 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="dex2jardex2jar的最新版下载地址http://sourceforge.net/projects/dex2jar/，这里使用的是2.0版本。dex2jar是一款开源工具，主要用于把dex转换为jar，同样的，也可以把jar转换为dex。下面命令可把classes.dex转换为tmp.jar：1$DEX2JAR_PATH/d2j-dex2jar.sh -f classes.dex -o tmp.jar注意$DEX2JAR_PATH指的是dex2jar的根目录，这里用的是....">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#dex2jar"><span class="toc-number">1.</span> <span class="toc-text">dex2jar</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#aapt"><span class="toc-number">2.</span> <span class="toc-text">aapt</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#apktool"><span class="toc-number">3.</span> <span class="toc-text">apktool</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#zipalign"><span class="toc-number">4.</span> <span class="toc-text">zipalign</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#javap"><span class="toc-number">5.</span> <span class="toc-text">javap</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#bytecode插件"><span class="toc-number">6.</span> <span class="toc-text">bytecode插件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#eclipse下的ASM-bytecode-online插件"><span class="toc-number">6.0.1.</span> <span class="toc-text">eclipse下的ASM bytecode online插件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#android-studio下的ASM-bytecode-online插件"><span class="toc-number">6.0.2.</span> <span class="toc-text">android studio下的ASM bytecode online插件</span></a></li></ol></li></ol><li class="toc-item toc-level-1"><a class="toc-link" href="#android-ndk"><span class="toc-number">7.</span> <span class="toc-text">android-ndk</span></a></li>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            android代码混淆系列文章-2.2、相关工具的介绍与使用
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/01/12/android-asm-02-2/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-01-12T00:00:00.000Z" itemprop="datePublished">2015-01-12</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/ASM/">ASM</a>, <a class="article-tag-link" href="/tags/Android/">Android</a>, <a class="article-tag-link" href="/tags/bytecode/">bytecode</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <h1 id="dex2jar"><a href="#dex2jar" class="headerlink" title="dex2jar"></a>dex2jar</h1><p>dex2jar的最新版下载地址<a href="http://sourceforge.net/projects/dex2jar/，这里使用的是2.0版本。" target="_blank" rel="noopener">http://sourceforge.net/projects/dex2jar/，这里使用的是2.0版本。</a></p>
+<p>dex2jar是一款开源工具，主要用于把dex转换为jar，同样的，也可以把jar转换为dex。</p>
+<p>下面命令可把classes.dex转换为tmp.jar：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$DEX2JAR_PATH/d2j-dex2jar.sh -f classes.dex -o tmp.jar</span><br></pre></td></tr></table></figure>
+
+<p>注意$DEX2JAR_PATH指的是dex2jar的根目录，这里用的是.sh，在windows下改为.bat即可。其中-f代表输入，-o代表输入。</p>
+<a id="more"></a>
+<p>下面命令可把tmp.jar转换为classes.dex：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$DEX2JAR_PATH/d2j-jar2dex.sh -o classes.dex -f tmp.jar</span><br></pre></td></tr></table></figure>
+
+<h1 id="aapt"><a href="#aapt" class="headerlink" title="aapt"></a>aapt</h1><p>aapt工具可用来打包或解析apk中的资源文件，android应用打包成apk的过程中，需要使用到aapt。该工具位于$ANDROID_SDK/build-tools/android-<version>/下。</version></p>
+<p>注意$ANDROID_SDK指的是android sdk的根目录，<version>指的是对应的android版本。</version></p>
+<p>由于aapt的用法较多，这里只介绍一个简单的用法，具体请参考aapt帮助信息。</p>
+<p>有些情况下，我们希望能够很方便地得到某apk的包名、版本号、启动activity等信息，这时可以使用下面命令来得到：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">aapt d badging &lt;apk path&gt;</span><br></pre></td></tr></table></figure>
+
+<p>例如这里我想得到qqpim.apk(手机管家应用)的包名：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">aapt d badging qqpim.apk | grep package</span><br></pre></td></tr></table></figure>
+
+<p>输出结果：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">package: name=&apos;com.tencent.qqpimsecure&apos; versionCode=&apos;1011&apos; versionName=&apos;5.3.0&apos;</span><br></pre></td></tr></table></figure>
+
+<p>其中，d为decode的意思</p>
+<h1 id="apktool"><a href="#apktool" class="headerlink" title="apktool"></a>apktool</h1><p>apktool用来反编译或重打包apk，在需要修改apk文件时非常有用。</p>
+<p>下载地址：<a href="http://code.google.com/p/android-apktool/downloads/list" target="_blank" rel="noopener">http://code.google.com/p/android-apktool/downloads/list</a></p>
+<p>apktool中使用aapt工具来解析或打包资源文件，使用smali/baksmali库(将在2.3章介绍)来编译或反编译dex。</p>
+<p>使用下面命令可以把qqpim.apk反编译到tmp目录下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apktool d qqpim.apk tmp</span><br></pre></td></tr></table></figure>
+
+<p>使用下面命令可以把tmp目录重新打包成tmp.apk：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apktool b tmp tmp.apk</span><br></pre></td></tr></table></figure>
+
+<p>其中，d为decode的意思，b为build的意思</p>
+<h1 id="zipalign"><a href="#zipalign" class="headerlink" title="zipalign"></a>zipalign</h1><p>zipalign能够对apk文件进行对齐优化，使得apk在android系统中运行得更快。</p>
+<p>zipalign位于aapt所在目录下，一般会在重打包apk后使用，命令如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">zipalign -f 4 old.apk new.apk</span><br></pre></td></tr></table></figure>
+
+<p>其中-f代表如果存在，则覆盖。4代表按4字节对齐，一般用于32位系统。</p>
+<h1 id="javap"><a href="#javap" class="headerlink" title="javap"></a>javap</h1><p>javap工具是java自带反编译工具，位于$JAVA_HOME/bin/目录下。</p>
+<p>假设我们需要反汇编cn.nover.Test这个类，注意，此时Test.class应该在./cn/nover/下。这里我们输入以下命令，即可反汇编出Test类的所有bytecode：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">javap -c -p cn.nover.Test</span><br></pre></td></tr></table></figure>
+
+<p>其中-c代表对代码进行反编译，-p代表显示所有方法和成员。</p>
+<p>另外还可以使用-s选项得到方法的签名，如</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">javap -s cn.nover.Test</span><br></pre></td></tr></table></figure>
+
+<p>另外反编译还可以使用像jd-gui这类工具，直接反编译出相应的java代码，当然jd-gui对于很多复杂的代码也是无能为力的，这里只能自己分析字节码了。</p>
+<h1 id="bytecode插件"><a href="#bytecode插件" class="headerlink" title="bytecode插件"></a>bytecode插件</h1><p>在eclipse和android studio等都有一款ASM bytecode online插件，可以很方便的研究bytecode与ASM（将在下一章中介绍）。</p>
+<h3 id="eclipse下的ASM-bytecode-online插件"><a href="#eclipse下的ASM-bytecode-online插件" class="headerlink" title="eclipse下的ASM bytecode online插件"></a>eclipse下的ASM bytecode online插件</h3><p><img src="/img/ec-asm-bytecode-online-01.png" alt><br>我们看到，只要光标在相应的代码上，bytecode插件就会自动定位到相应的bytecode代码中，很方便吧~</p>
+<p>另外还看到有个ASM的选项，选中后会显示对应的ASM代码。如下图所示：<br><img src="/img/ec-asm-bytecode-online-02.png" alt></p>
+<h3 id="android-studio下的ASM-bytecode-online插件"><a href="#android-studio下的ASM-bytecode-online插件" class="headerlink" title="android studio下的ASM bytecode online插件"></a>android studio下的ASM bytecode online插件</h3><p><img src="/img/as-asm-bytecode-online-01.jpg" alt><br><img src="/img/as-asm-bytecode-online-02.jpg" alt></p>
+<p>ASM代码看不懂没关系，我会在2.3章中详细介绍。</p>
+<h1 id="android-ndk"><a href="#android-ndk" class="headerlink" title="android-ndk"></a>android-ndk</h1><p>NDK是用来开发JNI的一套工具集，开发语言为C/C++。</p>
+<p>如何编译JNI程序请自行到网上查资料，这里我说一下如何通过JNI Crash时报的日志来定位出错行号：</p>
+<p>1、使用NDK根目录下有一个ndk-stack工具：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">adb shell logcat | ndk-stack -sym $PROJECT_PATH/obj/local/armeabi</span><br></pre></td></tr></table></figure>
+
+<p>或</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">adb shell logcat &gt; 1.log &amp;&amp; ndk-stack -sym $PROJECT_PATH/obj/local/armeabi -dump 1.log</span><br></pre></td></tr></table></figure>
+
+<p>2、使用toolchains工具集中相应的addr2line工具：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$NDK_PATH/toolchains/arm-linux-androideabi-4.8/prebuilt/linux-x86_64/bin/arm-linux-androideabi-addr2line -e $PROJECT_PATH/obj/local/armeabi/xx.so 000014d5</span><br></pre></td></tr></table></figure>
+
+<p>其中xx.so是对应的so文件，000014d5是报错的地址。</p>
+<p>arm-linux-androideabi-4.8与linux-x86_64这两个目录都是与系统相关的，Windows平台的童鞋请选择相应的Windows目录。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/01/12/android-asm-02-2",
+        distractionFreeMode: true,
+        title: "android代码混淆系列文章-2.2、相关工具的介绍与使用",
+        body: "http://noverguo.github.io/2015/01/12/android-asm-02-2/",
+        labels: ["ASM","bytecode","Android"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>

